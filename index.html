@@ -788,7 +788,9 @@ img { max-width: 100%; }
       st.className = 'status err';
       const code = e && e.code;
       if (code === 'wrong_passcode') st.textContent = '';
-      else if (code === 'no_api_key') st.textContent = "Photo reading isn't set up yet. You can type the items instead.";
+      else if (code === 'no_api_key') st.textContent = "Photo reading needs the ANTHROPIC_API_KEY secret in Supabase. You can type the items for now.";
+      else if (code === 'bad_api_key') st.textContent = "The Anthropic API key in Supabase isn't valid. Check it, or type the items for now.";
+      else if (code === 'no_credit') st.textContent = "The Anthropic account is out of credit. Add credit at console.anthropic.com, or type the items for now.";
       else if (code === 'rate_limited') st.textContent = 'Too many requests right now. Wait a minute and try again.';
       else if (code === 'image_rejected' || code === 'bad_image' || code === 'image_too_large') st.textContent = "That photo couldn't be read. Try a clearer, closer photo.";
       else if (code === 'no_items' || code === 'unreadable') st.textContent = "Couldn't find items on that receipt. Try a clearer photo, or type the items.";
