@@ -42,6 +42,8 @@
   --f-body: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
   --r: 14px;
+  --cat-groceries: #2f8a57; --cat-shopping: #7a4fc4; --cat-personal: #c2416b; --cat-dining: #d9822b;
+  --cat-bills: #2f63c4; --cat-transport: #1f8a99; --cat-misc: #7d857f;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -49,7 +51,7 @@
     --line: #29302c; --dash: #38413c; --accent: #5cc49b; --accent-soft: #1b3229; --accent-ink: #0b1a13;
     --mom: #ec8bab; --mom-soft: #3a1f2a; --dad: #88aaf0; --dad-soft: #1d2840;
     --good: #6fd49a; --bad: #ff8a80; --soft: #202622; --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.25);
-    --overlay: rgba(0, 0, 0, .6); color-scheme: dark;
+    --overlay: rgba(0, 0, 0, .6); color-scheme: dark; --cat-groceries: #6fd49a; --cat-shopping: #b59af0; --cat-personal: #ec8bab; --cat-dining: #f2b066; --cat-bills: #88aaf0; --cat-transport: #6fd0dc; --cat-misc: #a7b0aa;
   }
 }
 :root[data-theme="dark"] {
@@ -57,7 +59,7 @@
   --line: #29302c; --dash: #38413c; --accent: #5cc49b; --accent-soft: #1b3229; --accent-ink: #0b1a13;
   --mom: #ec8bab; --mom-soft: #3a1f2a; --dad: #88aaf0; --dad-soft: #1d2840;
   --good: #6fd49a; --bad: #ff8a80; --soft: #202622; --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.25);
-  --overlay: rgba(0, 0, 0, .6); color-scheme: dark;
+  --overlay: rgba(0, 0, 0, .6); color-scheme: dark; --cat-groceries: #6fd49a; --cat-shopping: #b59af0; --cat-personal: #ec8bab; --cat-dining: #f2b066; --cat-bills: #88aaf0; --cat-transport: #6fd0dc; --cat-misc: #a7b0aa;
 }
 body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
 .wrap { max-width: 44rem; margin-inline: auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 56px; display: flex; flex-direction: column; gap: 18px; }
@@ -167,6 +169,32 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .day-col i.m { background: var(--mom); } .day-col i.d { background: var(--dad); }
 .day-lbl { font-size: .72rem; color: var(--muted); white-space: nowrap; }
 
+/* categories */
+.cats { display: flex; flex-direction: column; gap: 6px; }
+.cat-row { display: grid; grid-template-columns: 42px 1fr auto; gap: 2px 12px; align-items: center; width: 100%; text-align: left; background: transparent; border: 0; border-radius: 12px; padding: 10px 8px; }
+.cat-row:hover { background: var(--soft); }
+.cat-icon { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; grid-row: span 2; color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); }
+.cat-icon svg { width: 22px; height: 22px; }
+.cat-name { font-weight: 700; display: flex; align-items: center; gap: 6px; min-width: 0; }
+.cat-name .chev { color: var(--faint); font-size: .8rem; transition: transform .15s; }
+.cat-row[aria-expanded="true"] .chev { transform: rotate(90deg); }
+.cat-amt { font-family: var(--f-mono); font-weight: 600; text-align: right; }
+.cat-sub { font-size: .78rem; color: var(--muted); display: flex; gap: 10px; flex-wrap: wrap; min-width: 0; }
+.cat-sub span { display: inline-flex; align-items: center; gap: 5px; }
+.cat-share { font-size: .78rem; color: var(--muted); text-align: right; }
+.cat-bar { grid-column: 2 / -1; height: 6px; border-radius: 99px; background: var(--soft); overflow: hidden; margin-top: 6px; }
+.cat-bar i { display: block; height: 100%; border-radius: 99px; background: var(--c); }
+.cat-items { margin: 2px 8px 10px 62px; padding: 8px 12px; background: var(--soft); border-radius: 10px; display: flex; flex-direction: column; }
+.cat-item { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: baseline; padding: 5px 0; font-size: .88rem; border-bottom: 1px dashed var(--dash); }
+.cat-item:last-child { border-bottom: 0; }
+.cat-item .d { color: var(--muted); font-family: var(--f-mono); font-size: .76rem; white-space: nowrap; }
+.cat-item .n { min-width: 0; overflow-wrap: anywhere; }
+.cat-item .n small { color: var(--muted); margin-left: 6px; }
+.cat-item .p { font-family: var(--f-mono); white-space: nowrap; }
+.tag { display: inline-flex; align-items: center; gap: 4px; font-size: .7rem; font-weight: 600; color: var(--c); background: color-mix(in srgb, var(--c) 12%, transparent); border-radius: 99px; padding: 1px 8px; margin-top: 3px; width: fit-content; }
+.slip-line .nm { display: flex; flex-direction: column; min-width: 0; }
+.cat-select { font: inherit; font-size: .78rem; margin-top: 4px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); width: fit-content; max-width: 100%; }
+.line .cat-select { grid-column: 1 / 3; margin-top: -2px; min-height: 34px; }
 .empty { color: var(--muted); font-size: .9rem; padding: 10px 0; text-align: center; }
 
 /* ---------- person page ---------- */
@@ -302,6 +330,11 @@ img { max-width: 100%; }
       <div class="split-legend" id="split-legend"></div>
     </section>
 
+    <section class="card">
+      <div class="card-head"><div><h2>By category</h2><p class="note">Before tax. Tap a category to see what's in it.</p></div></div>
+      <div class="cats" id="cats-home"></div>
+    </section>
+
     <div class="grid2">
       <section class="card">
         <div class="card-head"><div><h2>Tax</h2><p class="note">Kept separate from item totals.</p></div></div>
@@ -353,6 +386,10 @@ img { max-width: 100%; }
         <input class="search" id="p-search" type="search" placeholder="Search items or stores" aria-label="Search items or stores">
         <button class="edit-toggle" id="edit-toggle" aria-pressed="false" hidden>Edit</button>
       </div>
+    </section>
+    <section class="card">
+      <div class="card-head"><div><h2>By category</h2><p class="note">Before tax. Tap a category to see what's in it.</p></div></div>
+      <div class="cats" id="cats-person"></div>
     </section>
     <div class="slips" id="slips"></div>
   </main>
@@ -450,6 +487,86 @@ img { max-width: 100%; }
   const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
   const initial = (s) => ((s || '?').replace(/[^A-Za-z0-9]/g, '')[0] || '?').toUpperCase();
   const pct = (a, b) => (b > 0 ? Math.round((a / b) * 100) : 0);
+
+  // ---------- categories ----------
+  const CATS = [
+    { name: 'Groceries', c: 'var(--cat-groceries)', icon: '<path d="M3 4h2l2.4 11.2a1 1 0 0 0 1 .8h8.9a1 1 0 0 0 1-.8L20 7H6"/><circle cx="9" cy="20" r="1.4"/><circle cx="17" cy="20" r="1.4"/>' },
+    { name: 'Shopping', c: 'var(--cat-shopping)', icon: '<path d="M5 8h14l-1 12H6z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>' },
+    { name: 'Personal', c: 'var(--cat-personal)', icon: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>' },
+    { name: 'Food & dining', c: 'var(--cat-dining)', icon: '<path d="M7 3v8a2 2 0 0 0 2 2v8"/><path d="M11 3v8a2 2 0 0 1-2 2"/><path d="M17 3c-2 1-3 3.5-3 6s1 4 3 4v8"/>' },
+    { name: 'Bills', c: 'var(--cat-bills)', icon: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/>' },
+    { name: 'Transportation', c: 'var(--cat-transport)', icon: '<path d="M5 16V11l2-5h10l2 5v5"/><path d="M4 16h16v3H4z"/><circle cx="8" cy="13.5" r=".8"/><circle cx="16" cy="13.5" r=".8"/>' },
+    { name: 'Miscellaneous', c: 'var(--cat-misc)', icon: '<circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/>' },
+  ];
+  const catInfo = (n) => CATS.find((c) => c.name === n) || CATS[CATS.length - 1];
+  const catIcon = (n) => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('fill', 'none'); s.setAttribute('stroke', 'currentColor'); s.setAttribute('stroke-width', '2'); s.setAttribute('stroke-linecap', 'round'); s.setAttribute('stroke-linejoin', 'round'); s.setAttribute('aria-hidden', 'true'); s.innerHTML = catInfo(n).icon; return s; };
+  const catTag = (n) => { const t = el('span', { className: 'tag', textContent: n }); t.style.setProperty('--c', catInfo(n).c); return t; };
+  function catSelect(value, onChange) {
+    const sel = el('select', { className: 'cat-select' });
+    sel.setAttribute('aria-label', 'Category');
+    for (const c of CATS) sel.append(new Option(c.name, c.name));
+    sel.value = catInfo(value).name;
+    if (onChange) sel.addEventListener('change', () => onChange(sel.value));
+    return sel;
+  }
+  const GROCERY_STORES = /(harris teeter|lotte|sprouts|food lion|giant|safeway|whole foods|trader joe|costco|aldi|wegmans|mom'?s|h ?mart|patel|farm|kroger|lidl|publix|grocery|market|shoppers)/i;
+  function guessCategory(item, store) {
+    const i = String(item || ''), s = String(store || ''), both = i + ' ' + s;
+    if (/(\bbag\b|deposit|donation|rounding|\bfee\b|bag charge)/i.test(i)) return 'Miscellaneous';
+    if (/(\bbill\b|internet|electric|water bill|gas bill|verizon|comcast|xfinity|at&t|t-mobile|insurance|\brent\b|mortgage|subscription|netflix|spotify|hulu|icloud)/i.test(both)) return 'Bills';
+    if (/(ez ?pass|\btoll|fuel|gasoline|\bexxon|\bshell\b|\bbp\b|sunoco|\bsunoco|\buber\b(?! ?eats)|\blyft\b|parking|metro|smartrip|car wash|oil change)/i.test(both)) return 'Transportation';
+    if (/(restaurant|cafe|starbucks|dunkin|mcdonald|chipotle|pizza|office|doordash|uber ?eats|grubhub|panera|subway|chick-fil-a|taco bell|wendy|burger)/i.test(s) || /\b(meal|lunch|dinner|breakfast)\b/i.test(i)) return 'Food & dining';
+    if (/(henna|shampoo|conditioner|\bsoap\b|lotion|toothpaste|toothbrush|deodorant|razor|makeup|cosmetic|haircut|salon|vitamin|medicine|tylenol|advil|floss|sunscreen|face wash|moisturizer)/i.test(i) || /(cvs|walgreens|ulta|sephora)/i.test(s)) return 'Personal';
+    if (/(headphone|earbud|charger|cable|shirt|pants|shoes|clothes|jacket|\btoy\b|\bbook\b|phone case|electronic|towel|bedsheet|decor|\bgift\b)/i.test(i) || /(amazon|target|best buy|home depot|lowe'?s|macy|tj ?maxx|marshalls|ikea|old navy|kohl)/i.test(s)) return 'Shopping';
+    if (GROCERY_STORES.test(s) || !s) return 'Groceries';
+    return 'Miscellaneous';
+  }
+  const openCats = new Set();
+  function renderCategories(box, person) {
+    box.replaceChildren();
+    const ps = purchases.filter((p) => inMonth(p.date) && (!person || p.person === person));
+    const all = sum(ps, 'price');
+    const rows = CATS.map((c) => {
+      const its = ps.filter((p) => catInfo(p.category).name === c.name);
+      return { c, its, total: sum(its, 'price'), mom: sum(its.filter((p) => p.person === 'Mom'), 'price'), dad: sum(its.filter((p) => p.person === 'Dad'), 'price') };
+    }).filter((r) => r.its.length).sort((a, b) => b.total - a.total);
+    if (!rows.length) { box.append(el('p', { className: 'empty', textContent: 'Nothing for this month.' })); return; }
+    const max = Math.max(1, ...rows.map((r) => r.total));
+    for (const r of rows) {
+      const key = (person || 'all') + '|' + r.c.name;
+      const open = openCats.has(key);
+      const icon = el('span', { className: 'cat-icon' }, [catIcon(r.c.name)]);
+      const bar = el('span', { className: 'cat-bar' }, [el('i')]);
+      bar.firstChild.style.width = Math.max(2, (Math.max(0, r.total) / max) * 100) + '%';
+      const sub = el('span', { className: 'cat-sub' });
+      sub.append(el('span', { textContent: `${r.its.length} item${r.its.length === 1 ? '' : 's'}` }));
+      if (!person) {
+        if (r.mom) sub.append(el('span', {}, [el('i', { className: 'dot mom' }), money(r.mom)]));
+        if (r.dad) sub.append(el('span', {}, [el('i', { className: 'dot dad' }), money(r.dad)]));
+      }
+      const btn = el('button', { className: 'cat-row' }, [
+        icon,
+        el('span', { className: 'cat-name' }, [r.c.name, el('span', { className: 'chev', textContent: '›', ariaHidden: 'true' })]),
+        el('span', { className: 'cat-amt', textContent: money(r.total) }),
+        sub,
+        el('span', { className: 'cat-share', textContent: `${pct(r.total, all)}%` }),
+        bar,
+      ]);
+      btn.style.setProperty('--c', r.c.c);
+      btn.setAttribute('aria-expanded', String(open));
+      btn.addEventListener('click', () => { open ? openCats.delete(key) : openCats.add(key); renderCategories(box, person); });
+      box.append(btn);
+      if (open) {
+        const list = el('div', { className: 'cat-items' });
+        for (const p of r.its.slice().sort((a, b) => b.date.localeCompare(a.date) || Number(b.price) - Number(a.price))) {
+          const n = el('span', { className: 'n', textContent: p.item });
+          n.append(el('small', { textContent: (person ? '' : p.person + ' · ') + (p.store || '') }));
+          list.append(el('div', { className: 'cat-item' }, [el('span', { className: 'd', textContent: fmtDate(p.date) }), n, el('span', { className: 'p', textContent: money(Number(p.price)) })]));
+        }
+        box.append(list);
+      }
+    }
+  }
 
   // ---------- home ----------
   function renderMonthSelect() {
@@ -620,6 +737,7 @@ img { max-width: 100%; }
         return its.length ? { ...s, items: its, taxes: [], partial: true } : null;
       }).filter(Boolean);
     }
+    renderCategories($('cats-person'), who);
     const box = $('slips'); box.replaceChildren();
     if (!list.length) { box.append(el('div', { className: 'card empty', textContent: query ? 'No items match that search.' : 'No purchases for this month.' })); return; }
     for (const s of list) {
@@ -633,8 +751,13 @@ img { max-width: 100%; }
       ]));
       for (const p of s.items.slice().sort((a, b) => String(a.item).localeCompare(String(b.item)))) {
         const price = Number(p.price);
+        const nm = el('span', { className: 'nm' }, [el('span', { textContent: p.item })]);
+        nm.append(editing ? catSelect(p.category, async (v) => {
+          try { await api('POST', { action: 'set_category', id: p.id, category: v }); p.category = v; toast(`Moved to ${v}`); await load(); }
+          catch { toast("Couldn't change the category. Try again."); }
+        }) : catTag(catInfo(p.category).name));
         slip.append(el('div', { className: 'slip-line' }, [
-          el('span', { textContent: p.item }),
+          nm,
           el('span', { className: 'p' + (price < 0 ? ' neg' : ''), textContent: money(price) }),
           editing ? rmButton(async () => { await api('POST', { action: 'delete', table: 'purchases', id: p.id }); await load(); }) : el('span'),
         ]));
@@ -659,7 +782,7 @@ img { max-width: 100%; }
     const home = view === 'home';
     $('home').hidden = !home; $('home').style.display = home ? 'flex' : 'none';
     $('person').hidden = home; $('person').style.display = home ? 'none' : 'flex';
-    if (home) { renderSplit(); renderTax(); renderMonths(); renderStores(); renderDays(); }
+    if (home) { renderSplit(); renderCategories($('cats-home'), null); renderTax(); renderMonths(); renderStores(); renderDays(); }
     else renderPerson();
   }
 
@@ -718,14 +841,18 @@ img { max-width: 100%; }
   $('cam').addEventListener('change', onPhoto);
   $('pick').addEventListener('change', onPhoto);
 
-  function addLine(item = '', price = '') {
+  function addLine(item = '', price = '', category = null) {
     const name = el('input', { className: 'input', type: 'text', value: item, placeholder: 'Item' });
     name.setAttribute('aria-label', 'Item');
     const p = el('input', { className: 'input price', type: 'number', step: '0.01', inputMode: 'decimal', value: price === '' ? '' : Number(price).toFixed(2), placeholder: '0.00' });
     p.setAttribute('aria-label', 'Price');
     const x = el('button', { className: 'rm', textContent: '✕' });
     x.setAttribute('aria-label', 'Remove line');
-    const row = el('div', { className: 'line' }, [name, p, x]);
+    const cs = catSelect(category || guessCategory(item, $('r-store').value));
+    cs.dataset.auto = category ? '' : '1';
+    cs.addEventListener('change', () => { cs.dataset.auto = ''; });
+    name.addEventListener('change', () => { if (cs.dataset.auto) cs.value = guessCategory(name.value, $('r-store').value); });
+    const row = el('div', { className: 'line' }, [name, p, x, cs]);
     x.addEventListener('click', () => { row.remove(); updateSum(); });
     name.addEventListener('input', updateSum); p.addEventListener('input', updateSum);
     $('lines').append(row);
@@ -733,7 +860,9 @@ img { max-width: 100%; }
   }
   $('add-line').addEventListener('click', () => addLine().focus());
 
-  const readLines = () => [...$('lines').children].map((r) => ({ item: r.children[0].value.trim(), price: r.children[1].value === '' ? NaN : Number(r.children[1].value) }));
+  const readLines = () => [...$('lines').children].map((r) => ({ item: r.children[0].value.trim(), price: r.children[1].value === '' ? NaN : Number(r.children[1].value), category: r.children[3].value }));
+  // when the store changes, re-guess categories the person hasn't picked by hand
+  $('r-store').addEventListener('change', () => { for (const r of $('lines').children) { const cs = r.children[3]; if (cs.dataset.auto) cs.value = guessCategory(r.children[0].value, $('r-store').value); } });
   function updateSum() {
     const lines = readLines().filter((l) => l.item || !isNaN(l.price));
     const items = r2(lines.reduce((s, l) => s + (isNaN(l.price) ? 0 : l.price), 0));
@@ -922,8 +1051,8 @@ img { max-width: 100%; }
       const out = parseReceipt(data.text || '');
       if (!out.items.length) throw { code: 'no_items' };
       $('lines').replaceChildren();
-      for (const it of out.items) addLine(it.item, it.price);
       if (out.store) $('r-store').value = out.store;
+      for (const it of out.items) addLine(it.item, it.price);
       if (out.date) $('r-date').value = out.date;
       $('r-tax').value = (out.tax || 0).toFixed(2);
       receiptTotal = out.total;
@@ -947,7 +1076,7 @@ img { max-width: 100%; }
     const btn = $('save'); btn.disabled = true;
     const st = $('save-status'); st.className = 'status'; st.textContent = 'Adding…';
     try {
-      await api('POST', { action: 'add', person: addFor, date, store: storeName, items: lines.map((l) => ({ item: l.item, price: r2(l.price) })), tax });
+      await api('POST', { action: 'add', person: addFor, date, store: storeName, items: lines.map((l) => ({ item: l.item, price: r2(l.price), category: l.category })), tax });
       $('sheet').hidden = true;
       await load();
       toast(`Added ${lines.length} items to ${addFor}`);
