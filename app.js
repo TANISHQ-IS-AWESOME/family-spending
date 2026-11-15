@@ -427,6 +427,35 @@
     return el;
   }
 
+  // The barcode on the Home receipt opens a QR code holding a plain-text summary of the month.
+  function monthSummary(key, ps, ts) {
+    const m = (v) => (v < 0 ? '-' : '') + prefs.currency + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const items = sum(ps, 'price'), tax = sum(ts, 'tax');
+    const rows = profiles.map((p) => ({ n: p.name, t: sum(ps.filter((x) => x.profile_id === p.id), 'price') })).filter((x) => x.t !== 0).sort((a, b) => b.t - a.t);
+    return [`Tilly - ${fmtMonth(key)}`, ...rows.map((r) => `${r.n}: ${m(r.t)}`), `Tax: ${m(tax)}`, `Total: ${m(r2(items + tax))}`, `${plural(ps.length, 'item')}`].join('\n');
+  }
+  let qrSummary = '';
+  function openQr(key, ps, ts) {
+    qrSummary = monthSummary(key, ps, ts);
+    $('qr-title').textContent = key === 'all' ? 'Share all-time totals' : `Share ${fmtMonth(key)}`;
+    $('qr-text').textContent = qrSummary;
+    const box = $('qr-box'); box.textContent = '';
+    if (window.qrcode) {
+      qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8'];
+      const qr = qrcode(0, 'M'); qr.addData(qrSummary, 'Byte'); qr.make();
+      const n = qr.getModuleCount(), q = 2, size = n + q * 2;
+      let d = '';
+      for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (qr.isDark(y, x)) d += `M${x + q} ${y + q}h1v1h-1z`;
+      box.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" shape-rendering="crispEdges" role="img" aria-label="QR code of the summary"><path fill="#14161f" d="${d}"/></svg>`;
+    }
+    $('qr-share').hidden = !navigator.share;
+    openSheet('sheet-qr');
+  }
+  $('qr-copy').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(qrSummary); toast('Summary copied'); } catch (e) { toast("Couldn't copy. Select the text instead."); }
+  });
+  $('qr-share').addEventListener('click', async () => { try { await navigator.share({ title: 'Tilly', text: qrSummary }); } catch (e) {} });
+
   // ---------- HOME ----------
   function viewHome() {
     const out = [];
@@ -456,7 +485,8 @@
       h('hr', { class: 'rule' }),
       pos.length ? split : null,
       pos.length ? h('div', { class: 'split-key' }, pos.map((t) => h('span', null, dot(colorVar(t.p.color)), t.p.name, h('b', { text: pct(t.total, posSum) + '%' })))) : null,
-      h('div', { class: 'barcode', 'aria-hidden': 'true' })));
+      ps.length ? h('button', { class: 'barcode-btn', type: 'button', 'aria-label': 'Show a QR code of this month\'s totals', onclick: () => openQr(month, ps, ts) },
+        h('div', { class: 'barcode', 'aria-hidden': 'true' }), h('span', { text: 'Tap to share' })) : h('div', { class: 'barcode', 'aria-hidden': 'true' })));
     animateNumber(num, r2(items + tax));
 
     const recap = recapCard(); if (recap) out.push(recap);

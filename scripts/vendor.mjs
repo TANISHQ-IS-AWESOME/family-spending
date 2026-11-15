@@ -9,6 +9,7 @@ mkdirSync(out('tesseract/lang'), { recursive: true });
 const files = [
   ['@supabase/supabase-js/dist/umd/supabase.js', 'supabase.js'],
   ['@capacitor/core/dist/capacitor.js', 'capacitor.js'],
+  ['qrcode-generator/qrcode.js', 'qrcode.js'],
   ['tesseract.js/dist/tesseract.min.js', 'tesseract/tesseract.min.js'],
   ['tesseract.js/dist/worker.min.js', 'tesseract/worker.min.js'],
   ['tesseract.js-core/tesseract-core-simd-lstm.wasm.js', 'tesseract/core/tesseract-core-simd-lstm.wasm.js'],

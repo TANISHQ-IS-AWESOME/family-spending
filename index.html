@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap">
 <script>try{var t=localStorage.getItem('tilly-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
-<link rel="stylesheet" href="app.css?v=202611142037">
+<link rel="stylesheet" href="app.css?v=202611151434">
 </head>
 <body>
 
@@ -188,11 +188,26 @@
   </form>
 </div>
 
+<!-- ============ MONTH QR ============ -->
+<div class="sheet-bg" id="sheet-qr" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="qr-title">
+    <div class="sheet-head"><h2 id="qr-title">Share this month</h2><button class="x" type="button" data-close aria-label="Close">×</button></div>
+    <p class="note">Point any phone camera at this code to see the totals. The summary is inside the code itself, so nothing is uploaded and no link is shared.</p>
+    <div class="qr-box" id="qr-box"></div>
+    <pre class="qr-text mono" id="qr-text"></pre>
+    <div class="photo-row">
+      <button class="btn ghost" id="qr-copy" type="button">Copy summary</button>
+      <button class="btn primary" id="qr-share" type="button">Share</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast" hidden role="status"></div>
 
-<script src="vendor/capacitor.js?v=202611142037"></script>
-<script src="vendor/supabase.js?v=202611142037"></script>
-<script src="scan.js?v=202611142037"></script>
-<script src="app.js?v=202611142037"></script>
+<script src="vendor/capacitor.js?v=202611151434"></script>
+<script src="vendor/qrcode.js?v=202611151434"></script>
+<script src="vendor/supabase.js?v=202611151434"></script>
+<script src="scan.js?v=202611151434"></script>
+<script src="app.js?v=202611151434"></script>
 </body>
 </html>
