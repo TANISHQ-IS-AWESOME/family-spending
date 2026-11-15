@@ -359,7 +359,7 @@ svg.ic { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-wid
 .set-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .set-row:first-of-type { padding-top: 0; }
 .set-row:last-child { border-bottom: 0; padding-bottom: 0; }
-.set-label { font-weight: 700; min-width: 0; }
+.set-label { font-weight: 700; min-width: 0; flex: 1 1 11rem; }
 .set-label small { display: block; font-weight: 400; color: var(--muted); font-size: .82rem; overflow-wrap: anywhere; }
 .set-row .seg button { min-height: 38px; padding: 6px 14px; font-size: .86rem; }
 .set-row .btn { flex: none; }

@@ -826,5 +826,5 @@
     else if (location.hash === '#demo') { seedDemo(); mode = 'demo'; enterApp(); }
     else showAuth();
   })();
-  if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+  if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((r) => r.update()).catch(() => {});
 })();
