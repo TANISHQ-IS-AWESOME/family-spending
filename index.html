@@ -16,6 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap">
+<script>try{var t=localStorage.getItem('tilly-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
@@ -56,6 +57,7 @@
       <label class="field" for="password">Password
         <input class="input" id="password" type="password" autocomplete="current-password" placeholder="At least 8 characters" minlength="8" required>
       </label>
+      <button class="text-btn forgot" id="forgot" type="button">Forgot your password?</button>
       <p class="status err" id="auth-err" aria-live="polite"></p>
       <button class="btn primary" id="auth-submit" type="submit">Sign in</button>
       <div class="or"><span>or</span></div>
@@ -82,7 +84,7 @@
     <button data-tab="receipts"><span data-ic="receipt"></span><span>Receipts</span></button>
     <button class="fab" id="open-add" aria-label="Add a receipt"><span data-ic="plus"></span></button>
     <button data-tab="insights"><span data-ic="insights"></span><span>Insights</span></button>
-    <button data-tab="profiles"><span data-ic="profiles"></span><span>Profiles</span></button>
+    <button data-tab="settings"><span data-ic="gear"></span><span>Settings</span></button>
   </nav>
 </div>
 
@@ -143,6 +145,42 @@
     <p class="status err" id="pf-err" aria-live="polite"></p>
     <button class="btn primary" type="submit" id="pf-save">Create profile</button>
     <button class="btn danger" type="button" id="pf-delete" hidden>Delete profile</button>
+  </form>
+</div>
+
+<!-- ============ RESET PASSWORD (signed out) ============ -->
+<div class="sheet-bg" id="sheet-reset" hidden>
+  <form class="sheet" role="dialog" aria-modal="true" aria-labelledby="reset-title" id="reset-form" novalidate>
+    <div class="sheet-head"><h2 id="reset-title">Reset your password</h2><button class="x" type="button" data-close aria-label="Close">×</button></div>
+    <p class="note">Enter the recovery code you saved when you created your account. It looks like ABCD-EFGH-JKMN-PQRS.</p>
+    <label class="field" for="reset-email">Email<input class="input" id="reset-email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com" required></label>
+    <label class="field" for="reset-code">Recovery code<input class="input mono" id="reset-code" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX" maxlength="24" required></label>
+    <label class="field" for="reset-pass">New password<input class="input" id="reset-pass" type="password" autocomplete="new-password" placeholder="At least 8 characters" minlength="8" required></label>
+    <p class="status err" id="reset-err" aria-live="polite"></p>
+    <button class="btn primary" type="submit" id="reset-submit">Set new password</button>
+    <p class="fine">No code? Recovery by email isn't available yet, so an account without its code can't be reset.</p>
+  </form>
+</div>
+
+<!-- ============ SHOW RECOVERY CODE ============ -->
+<div class="sheet-bg" id="sheet-code" hidden data-sticky>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="code-title">
+    <div class="sheet-head"><h2 id="code-title">Save your recovery code</h2></div>
+    <p class="note" id="code-note">This code is the only way to get back in if you forget your password. Write it down or save it in your password manager. It is shown only once.</p>
+    <div class="codebox mono" id="code-value" aria-label="Recovery code"></div>
+    <button class="btn ghost" id="code-copy" type="button">Copy code</button>
+    <button class="btn primary" id="code-done" type="button">I've saved it</button>
+  </div>
+</div>
+
+<!-- ============ CHANGE PASSWORD (signed in) ============ -->
+<div class="sheet-bg" id="sheet-password" hidden>
+  <form class="sheet" role="dialog" aria-modal="true" aria-labelledby="pw-title" id="pw-form" novalidate>
+    <div class="sheet-head"><h2 id="pw-title">Change password</h2><button class="x" type="button" data-close aria-label="Close">×</button></div>
+    <label class="field" for="pw-new">New password<input class="input" id="pw-new" type="password" autocomplete="new-password" placeholder="At least 8 characters" minlength="8" required></label>
+    <label class="field" for="pw-again">New password again<input class="input" id="pw-again" type="password" autocomplete="new-password" minlength="8" required></label>
+    <p class="status err" id="pw-err" aria-live="polite"></p>
+    <button class="btn primary" type="submit" id="pw-submit">Save new password</button>
   </form>
 </div>
 

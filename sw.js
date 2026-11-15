@@ -1,5 +1,5 @@
 // Keeps the app shell available offline; data always comes fresh from the server.
-const CACHE = 'tilly-v5';
+const CACHE = 'tilly-v6';
 const SHELL = ['./', 'index.html', 'app.css', 'app.js', 'scan.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL))); self.skipWaiting(); });
 self.addEventListener('activate', (e) => {

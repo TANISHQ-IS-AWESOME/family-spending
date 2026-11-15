@@ -26,6 +26,7 @@
     home: '<path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1z"/>',
     receipt: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/>',
     insights: '<path d="M5 20V10M12 20V4M19 20v-7"/>',
+    gear: '<circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8"/>',
     profiles: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><path d="M16 5.2a3.2 3.2 0 0 1 0 5.6M17.5 14.8c2 .7 3.5 2.4 3.5 5.2"/>',
     plus: '<path d="M12 5v14M5 12h14"/>',
     camera: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
@@ -48,7 +49,10 @@
   document.querySelectorAll('[data-ic]').forEach((n) => n.prepend(icon(n.dataset.ic)));
 
   const r2 = (x) => Math.round(x * 100) / 100;
-  const money = (v) => (v < 0 ? '−$' : '$') + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const lsEarly = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+  const CURRENCIES = ['$', '€', '£', '₹', '¥'];
+  const prefs = { theme: lsEarly('tilly-theme') || 'system', currency: CURRENCIES.includes(lsEarly('tilly-currency')) ? lsEarly('tilly-currency') : '$', start: lsEarly('tilly-start') === 'all' ? 'all' : 'latest' };
+  const money = (v) => (v < 0 ? '−' : '') + prefs.currency + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -94,7 +98,7 @@
 
   // ---------- state ----------
   let sb = null, session = null, mode = null; // mode: 'remote' | 'demo'
-  let profiles = [], purchases = [], taxes = [], loaded = false, loadError = false, imported = true;
+  let profiles = [], purchases = [], taxes = [], loaded = false, loadError = false, imported = true, recoveryAt = null;
   let tab = 'home', month = null, filterProfile = 'all', query = '', editing = false, storeSort = 'high', heroShown = null;
   const openCats = new Set();
   const profileById = (id) => profiles.find((p) => p.id === id);
@@ -115,13 +119,15 @@
   const ok = ({ error }) => { if (error) throw error; };
   const remote = {
     async load() {
-      const [pf, pu, tx, im] = await Promise.all([
+      const [pf, pu, tx, im, rc] = await Promise.all([
         fetchAll('sp_profiles', 'id, name, color, created_at'),
         fetchAll('sp_purchases', 'id, profile_id, date, store, item, price, category'),
         fetchAll('sp_taxes', 'id, profile_id, date, store, tax'),
         sb.from('sp_imports').select('user_id').maybeSingle(),
+        sb.from('sp_recovery').select('created_at').maybeSingle(),
       ]);
       imported = !!(im && im.data);
+      recoveryAt = rc && rc.data ? rc.data.created_at : null;
       return { profiles: pf.sort((a, b) => a.created_at.localeCompare(b.created_at)), purchases: pu.map((x) => ({ ...x, price: Number(x.price) })), taxes: tx.map((x) => ({ ...x, tax: Number(x.tax) })) };
     },
     async addProfile(name, color) { ok(await sb.from('sp_profiles').insert({ name, color })); },
@@ -194,7 +200,7 @@
       profiles = d.profiles; purchases = d.purchases; taxes = d.taxes;
       loaded = true; loadError = false;
       const months = monthList();
-      if (month == null) month = months[0] || 'all';
+      if (month == null) month = prefs.start === 'all' ? 'all' : months[0] || 'all';
       else if (month !== 'all' && !months.includes(month)) month = months[0] || 'all';
       if (filterProfile !== 'all' && !profileById(filterProfile)) filterProfile = 'all';
     } catch (e) {
@@ -279,7 +285,7 @@
         h('h2', { text: 'Start with a profile' }),
         h('p', { text: 'A profile is anyone or anything you want a separate total for: you, a partner, the household, a side business.' }),
         h('button', { class: 'btn primary', text: 'Create your first profile', onclick: () => openProfileSheet(null) }),
-        mode === 'remote' && !imported && h('button', { class: 'link', text: 'Used the Family Spending app before? Bring your data over', onclick: () => setTab('profiles') })));
+        mode === 'remote' && !imported && h('button', { class: 'link', text: 'Used the Family Spending app before? Bring your data over', onclick: () => setTab('settings') })));
       return out;
     }
     const ps = purchases.filter((p) => inMonth(p.date)), ts = taxes.filter((t) => inMonth(t.date));
@@ -403,7 +409,7 @@
 
     const drows = group((p) => p.date).sort((a, b) => a.k.localeCompare(b.k)), dmax = Math.max(1, ...drows.map((r) => r.total));
     const days = h('div', { class: 'days' }, drows.map((r) => h('div', { class: 'day', title: `${fmtDate(r.k)}: ${money(r.total)}` },
-      h('span', { class: 'day-amt', text: '$' + Math.round(r.total).toLocaleString('en-US') }),
+      h('span', { class: 'day-amt', text: prefs.currency + Math.round(r.total).toLocaleString('en-US') }),
       h('div', { class: 'day-col' }, profiles.filter((p) => r.by[p.id] > 0).map((p) => h('i', { c: colorVar(p.color), style: { height: Math.max(2, (r.by[p.id] / dmax) * 110) + 'px' } }))),
       h('span', { class: 'day-lbl', text: fmtDate(r.k) }))));
 
@@ -417,26 +423,98 @@
     ];
   }
 
-  // ---------- PROFILES & ACCOUNT ----------
-  function viewProfiles() {
+  // ---------- SETTINGS ----------
+  async function callAccount(action, extra, withAuth) {
+    const headers = { 'content-type': 'application/json' };
+    if (withAuth) headers.authorization = 'Bearer ' + session.access_token;
+    const res = await fetch(ACCOUNT_FN, { method: 'POST', headers, body: JSON.stringify({ action, ...extra }) });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) throw { code: d.error || 'server_error' };
+    return d;
+  }
+  function applyTheme() {
+    const r = document.documentElement;
+    if (prefs.theme === 'light' || prefs.theme === 'dark') r.setAttribute('data-theme', prefs.theme); else r.removeAttribute('data-theme');
+  }
+  const setPref = (k, v) => { prefs[k] = v; ls.set('tilly-' + k, v); };
+  const setRow = (label, sub, control) => h('div', { class: 'set-row' }, h('div', { class: 'set-label' }, label, sub ? h('small', { text: sub }) : null), control);
+  const segPick = (label, options, value, onPick) => h('div', { class: 'seg', role: 'group', 'aria-label': label }, options.map(([k, text]) => h('button', { 'aria-pressed': String(value === k), text, onclick: () => onPick(k) })));
+  // a button that needs a second tap before it does something that can't be undone
+  function armButton(cls, label, armedLabel, fn) {
+    const b = h('button', { class: cls, text: label });
+    b.addEventListener('click', async () => {
+      if (!b.dataset.armed) { b.dataset.armed = '1'; b.textContent = armedLabel; setTimeout(() => { if (b.isConnected && !b.disabled) { b.dataset.armed = ''; b.textContent = label; } }, 5000); return; }
+      b.disabled = true;
+      try { await fn(); } catch { toast("That didn't work. Check your connection and try again."); }
+      if (b.isConnected) { b.disabled = false; b.dataset.armed = ''; b.textContent = label; }
+    });
+    return b;
+  }
+  function exportCsv() {
+    const safe = (v) => { const t = String(v == null ? '' : v); return /^[=+\-@]/.test(t) ? "'" + t : t; };
+    const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+    const name = (id) => (profileById(id) || {}).name || '';
+    const rows = [['Date', 'Profile', 'Store', 'Item', 'Category', 'Amount']];
+    for (const p of purchases.slice().sort((x, y) => x.date.localeCompare(y.date))) rows.push([p.date, safe(name(p.profile_id)), safe(p.store), safe(p.item), catInfo(p.category).name, p.price.toFixed(2)]);
+    for (const t of taxes.slice().sort((x, y) => x.date.localeCompare(y.date))) rows.push([t.date, safe(name(t.profile_id)), safe(t.store), 'Sales tax', 'Tax', t.tax.toFixed(2)]);
+    const url = URL.createObjectURL(new Blob([rows.map((r) => r.map(q).join(',')).join('\r\n')], { type: 'text/csv' }));
+    const a = h('a', { href: url, download: `tilly-export-${iso(new Date())}.csv` });
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    toast(`Exported ${plural(rows.length - 1, 'row')}`);
+  }
+  function showCode(code, note) {
+    $('code-value').textContent = code;
+    $('code-note').textContent = note || 'This code is the only way to get back in if you forget your password. Write it down or save it in your password manager. It is shown only once.';
+    $('code-copy').textContent = 'Copy code';
+    $('sheet-code').hidden = false; $('code-done').focus();
+  }
+  $('code-copy').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText($('code-value').textContent); $('code-copy').textContent = 'Copied'; }
+    catch { const r = document.createRange(); r.selectNodeContents($('code-value')); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); $('code-copy').textContent = 'Selected. Copy it now'; }
+  });
+  $('code-done').addEventListener('click', () => { $('sheet-code').hidden = true; $('code-value').textContent = ''; });
+
+  function viewSettings() {
+    // profiles
     const list = h('div', { class: 'plist' }, profiles.map((p) => {
       const n = purchases.filter((x) => x.profile_id === p.id);
       return h('div', { class: 'prow' }, avatar(p.name, colorVar(p.color), 'round solid'),
-        h('div', { style: { minWidth: 0 } }, h('div', { class: 'prow-name', text: p.name }), h('div', { class: 'prow-sub', text: `${money(sum(n, 'price'))} · ${plural(n.length, 'item')} all time` })),
+        h('div', { style: { minWidth: 0 } }, h('div', { class: 'prow-name', text: p.name }), h('div', { class: 'prow-sub', text: `${money(sum(n, 'price'))} · ${plural(n.length, 'item')}` })),
         h('button', { class: 'btn ghost small', text: 'Edit', onclick: () => openProfileSheet(p) }));
     }));
     if (!profiles.length) list.append(h('p', { class: 'empty', text: 'No profiles yet.' }));
     const out = [
-      h('div', { class: 'section-head' }, h('h2', { class: 'section-title', text: 'Profiles' })),
-      h('section', { class: 'card' }, list, h('button', { class: 'btn primary', style: { marginTop: '14px' }, onclick: () => openProfileSheet(null) }, icon('plus'), 'New profile')),
+      h('div', { class: 'section-head' }, h('h2', { class: 'section-title', text: 'Settings' })),
+      card('Profiles', 'Rename, recolor or delete a profile, or add a new one.', list, h('button', { class: 'btn primary', style: { marginTop: '14px' }, onclick: () => openProfileSheet(null) }, icon('plus'), 'New profile')),
+      card('Appearance', null,
+        setRow('Theme', 'System follows your phone or computer.', segPick('Theme', [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']], prefs.theme, (k) => { setPref('theme', k); applyTheme(); render(); }))),
+      card('Preferences', 'Saved on this device.',
+        setRow('Currency symbol', null, (() => { const sel = h('select', { class: 'set-select', 'aria-label': 'Currency symbol' }, CURRENCIES.map((c) => new Option(c, c))); sel.value = prefs.currency; sel.addEventListener('change', () => { setPref('currency', sel.value); heroShown = null; render(); }); return sel; })()),
+        setRow('Open on', 'Which month shows first when you open Tilly.', segPick('Open on', [['latest', 'Latest month'], ['all', 'All time']], prefs.start, (k) => { setPref('start', k); month = k === 'all' ? 'all' : monthList()[0] || 'all'; render(); }))),
+      card('Your data', null,
+        setRow('Export', 'Download every receipt as a spreadsheet file (CSV).', h('button', { class: 'btn ghost small', text: 'Export', disabled: !purchases.length, onclick: exportCsv }))),
     ];
     if (mode === 'demo') {
       out.push(card('Like what you see?', 'Create a free account to track your own receipts.', h('button', { class: 'btn primary', text: 'Create account', onclick: () => leaveDemo(true) }), h('button', { class: 'btn ghost', style: { marginTop: '10px' }, text: 'Leave the demo', onclick: () => leaveDemo(false) })));
       return out;
     }
-    const acct = h('div', { class: 'acct' }, h('div', null, h('div', { class: 'note', text: 'Signed in as' }), h('div', { class: 'acct-email', text: (session && session.user && session.user.email) || '' })),
-      h('button', { class: 'btn ghost', text: 'Sign out', onclick: signOut }));
-    out.push(card('Account', null, acct));
+    const newCode = async () => { const d = await callAccount('new_recovery_code', {}, true); recoveryAt = new Date().toISOString(); render(); showCode(d.recovery_code, recoveryWas ? 'Your old code no longer works. Save this new one somewhere safe. It is shown only once.' : null); };
+    const recoveryWas = !!recoveryAt;
+    const codeBtn = recoveryAt
+      ? armButton('btn ghost small', 'Replace', 'Tap again: the old code stops working', newCode)
+      : h('button', { class: 'btn primary small', text: 'Create', onclick: async (e) => { e.target.disabled = true; try { await newCode(); } catch { e.target.disabled = false; toast("Couldn't create a code. Try again."); } } });
+    out.push(card('Account', null,
+      !recoveryAt ? h('p', { class: 'warn-note', style: { marginBottom: '12px' }, text: "You don't have a recovery code yet. Create one so you can reset your password if you forget it." }) : null,
+      setRow('Email', (session && session.user && session.user.email) || '', null),
+      setRow('Password', null, h('button', { class: 'btn ghost small', text: 'Change', onclick: () => { $('pw-new').value = ''; $('pw-again').value = ''; $('pw-err').textContent = ''; openSheet('sheet-password'); $('pw-new').focus(); } })),
+      setRow('Recovery code', recoveryAt ? `Created ${fmtDate(recoveryAt.slice(0, 10))}. Use it to reset a forgotten password.` : 'Not set up yet.', codeBtn),
+      setRow('Sign out', 'On this device.', h('button', { class: 'btn ghost small', text: 'Sign out', onclick: signOut })),
+      setRow('Delete account', 'Removes your account, profiles and every receipt for good.', armButton('danger-link', 'Delete', 'Tap again to delete everything', async () => {
+        await callAccount('delete_account', { confirm: 'DELETE' }, true);
+        try { await sb.auth.signOut({ scope: 'local' }); } catch {}
+        session = null; mode = null; showAuth('up'); toast('Your account was deleted');
+      }))));
     if (!imported) {
       const input = h('input', { class: 'input', type: 'password', placeholder: 'Family passcode', 'aria-label': 'Family passcode', autocomplete: 'off' });
       const status = h('p', { class: 'status', 'aria-live': 'polite' });
@@ -445,9 +523,7 @@
         if (!input.value.trim()) { status.className = 'status err'; status.textContent = 'Enter the family passcode first.'; return; }
         btn.disabled = true; status.className = 'status'; status.replaceChildren(h('span', { class: 'spin' }), 'Bringing your receipts over…');
         try {
-          const res = await fetch(ACCOUNT_FN, { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + session.access_token }, body: JSON.stringify({ action: 'import_legacy', passcode: input.value.trim() }) });
-          const d = await res.json().catch(() => ({}));
-          if (!res.ok) throw { code: d.error };
+          const d = await callAccount('import_legacy', { passcode: input.value.trim() }, true);
           toast(`Imported ${d.purchases} items`);
           month = null; await refresh(); setTab('home');
         } catch (e) {
@@ -473,12 +549,13 @@
     const keepFocus = document.activeElement && document.activeElement.id === 'receipt-search';
     if (loadError && !loaded) { view.replaceChildren(h('div', { class: 'card empty' }, h('p', { text: "Couldn't load your receipts. Check your connection." }), h('button', { class: 'btn primary', style: { marginTop: '12px' }, text: 'Try again', onclick: refresh }))); return; }
     if (!loaded) { view.replaceChildren(h('div', { class: 'card empty' }, h('span', { class: 'spin' }), 'Loading your receipts…')); return; }
-    const kids = tab === 'receipts' ? viewReceipts() : tab === 'insights' ? viewInsights() : tab === 'profiles' ? viewProfiles() : viewHome();
+    const kids = tab === 'receipts' ? viewReceipts() : tab === 'insights' ? viewInsights() : tab === 'settings' ? viewSettings() : viewHome();
     view.replaceChildren(...kids.filter(Boolean));
     if (keepFocus && $('receipt-search')) { const i = $('receipt-search'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
   }
   function setTab(name) {
-    if (!['home', 'receipts', 'insights', 'profiles'].includes(name)) name = 'home';
+    if (name === 'profiles') name = 'settings';
+    if (!['home', 'receipts', 'insights', 'settings'].includes(name)) name = 'home';
     const changed = tab !== name;
     tab = name; editing = false;
     if (name !== 'receipts') query = '';
@@ -494,10 +571,10 @@
   const openSheet = (id) => { $(id).hidden = false; const x = $(id).querySelector('[data-close]'); if (x) x.focus(); };
   const closeSheets = () => document.querySelectorAll('.sheet-bg').forEach((s) => (s.hidden = true));
   document.querySelectorAll('.sheet-bg').forEach((bg) => {
-    bg.addEventListener('click', (e) => { if (e.target === bg) closeSheets(); });
+    bg.addEventListener('click', (e) => { if (e.target === bg && !('sticky' in bg.dataset)) closeSheets(); });
     bg.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', closeSheets));
   });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSheets(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && $('sheet-code').hidden) closeSheets(); });
 
   // profile editor
   let pfEditing = null, pfColor = 'pink';
@@ -648,6 +725,7 @@
     $('auth-submit').textContent = authMode === 'in' ? 'Sign in' : 'Create account';
     $('password').autocomplete = authMode === 'in' ? 'current-password' : 'new-password';
     $('auth-err').textContent = '';
+    $('forgot').hidden = authMode !== 'in';
   }
   $('mode-in').addEventListener('click', () => { authMode = 'in'; drawAuthMode(); });
   $('mode-up').addEventListener('click', () => { authMode = 'up'; drawAuthMode(); });
@@ -666,17 +744,20 @@
     if (!sb) { err.textContent = "Couldn't reach Tilly. Check your connection and reload."; return; }
     btn.disabled = true; err.textContent = '';
     const label = btn.textContent; btn.replaceChildren(h('span', { class: 'spin' }), authMode === 'in' ? 'Signing in…' : 'Creating your account…');
+    let newCode = null;
     try {
       if (authMode === 'up') {
         const res = await fetch(ACCOUNT_FN, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'signup', email, password }) });
         const d = await res.json().catch(() => ({}));
         if (!res.ok) throw { code: d.error || 'server_error' };
+        newCode = d.recovery_code || null;
       }
       const { data, error } = await sb.auth.signInWithPassword({ email, password });
       if (error) throw { code: /invalid/i.test(error.message) ? 'bad_login' : 'server_error' };
       session = data.session; mode = 'remote'; ls.set('tilly-returning', '1');
       $('password').value = '';
       enterApp();
+      if (newCode) showCode(newCode);
     } catch (x) {
       const code = x && x.code;
       err.textContent = code === 'email_taken' ? 'That email already has an account. Switch to Sign in.'
@@ -686,6 +767,44 @@
         : "Something went wrong. Check your connection and try again.";
     }
     btn.disabled = false; btn.textContent = label;
+  });
+  $('forgot').addEventListener('click', () => {
+    $('reset-email').value = $('email').value.trim(); $('reset-code').value = ''; $('reset-pass').value = ''; $('reset-err').textContent = '';
+    openSheet('sheet-reset'); ($('reset-email').value ? $('reset-code') : $('reset-email')).focus();
+  });
+  $('reset-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = $('reset-email').value.trim(), code = $('reset-code').value.trim(), password = $('reset-pass').value, err = $('reset-err'), btn = $('reset-submit');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { err.textContent = 'Enter the email for your account.'; return; }
+    if (code.replace(/[^A-Za-z0-9]/g, '').length !== 16) { err.textContent = 'The recovery code has 16 letters and numbers.'; return; }
+    if (password.length < 8) { err.textContent = 'Use a password with at least 8 characters.'; return; }
+    if (!sb) { err.textContent = "Couldn't reach Tilly. Check your connection and reload."; return; }
+    btn.disabled = true; err.textContent = '';
+    try {
+      const d = await callAccount('reset_password', { email, code, password });
+      const { data, error } = await sb.auth.signInWithPassword({ email, password });
+      if (error) throw { code: 'server_error' };
+      session = data.session; mode = 'remote'; ls.set('tilly-returning', '1');
+      enterApp(); toast('Password changed');
+      if (d.recovery_code) showCode(d.recovery_code, 'Your password is changed and the old code is used up. Save this new code somewhere safe. It is shown only once.');
+    } catch (x) {
+      const c = x && x.code;
+      err.textContent = c === 'bad_code' ? "That email and recovery code don't match." : c === 'locked' ? 'Too many tries. Wait 15 minutes and try again.' : c === 'weak_password' ? 'Use a password with at least 8 characters.' : "Something went wrong. Check your connection and try again.";
+    }
+    btn.disabled = false;
+  });
+  $('pw-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const a = $('pw-new').value, b = $('pw-again').value, err = $('pw-err'), btn = $('pw-submit');
+    if (a.length < 8) { err.textContent = 'Use a password with at least 8 characters.'; return; }
+    if (a !== b) { err.textContent = "The two passwords don't match."; return; }
+    btn.disabled = true; err.textContent = '';
+    try {
+      const { error } = await sb.auth.updateUser({ password: a });
+      if (error) throw error;
+      closeSheets(); toast('Password changed');
+    } catch (x) { err.textContent = /different/i.test((x && x.message) || '') ? 'Pick a password different from your current one.' : "Couldn't change the password. Try again."; }
+    btn.disabled = false;
   });
   $('try-demo').addEventListener('click', () => { seedDemo(); mode = 'demo'; enterApp(); });
   $('demo-signup').addEventListener('click', () => leaveDemo(true));
