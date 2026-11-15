@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Status-bar icon for reminders: a white receipt (Android tints it). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M6,2h12a1,1 0,0 1,1 1v18l-2.33,-1.5 -2.34,1.5 -2.33,-1.5 -2.33,1.5 -2.34,-1.5L5,21V3A1,1 0,0 1,6 2zM8,6v2h8V6zM8,10v2h5v-2zM8,14v2h8v-2z"/>
+</vector>

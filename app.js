@@ -4,6 +4,15 @@
   const SUPABASE_URL = 'https://uvbadnjcisuzgypzqyub.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_Lq6n-ZvzHKyYWGkEHp2EFw_jW2hU4HE';
   const ACCOUNT_FN = SUPABASE_URL + '/functions/v1/account';
+  // Password-reset links always open the web version, which works on any device.
+  const RESET_URL = 'https://tanishq-is-awesome.github.io/family-spending/';
+  // ---------- phone app (Capacitor) ----------
+  const Cap = window.Capacitor;
+  const NATIVE = !!(Cap && Cap.isNativePlatform && Cap.isNativePlatform());
+  const PLATFORM = NATIVE ? Cap.getPlatform() : 'web';
+  const plugin = (name) => (NATIVE && Cap.registerPlugin ? Cap.registerPlugin(name) : null);
+  const Camera = plugin('Camera'), Notes = plugin('LocalNotifications'), Network = plugin('Network'), DocScanner = PLATFORM === 'android' ? plugin('DocumentScanner') : null;
+  if (NATIVE) document.documentElement.classList.add('native', 'platform-' + PLATFORM);
 
   // ---------- tiny helpers ----------
   const $ = (id) => document.getElementById(id);
@@ -51,7 +60,7 @@
   const r2 = (x) => Math.round(x * 100) / 100;
   const lsEarly = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
   const CURRENCIES = ['$', '€', '£', '₹', '¥'];
-  const prefs = { theme: lsEarly('tilly-theme') || 'system', currency: CURRENCIES.includes(lsEarly('tilly-currency')) ? lsEarly('tilly-currency') : '$', start: lsEarly('tilly-start') === 'all' ? 'all' : 'latest' };
+  const prefs = { theme: lsEarly('tilly-theme') || 'system', currency: CURRENCIES.includes(lsEarly('tilly-currency')) ? lsEarly('tilly-currency') : '$', start: lsEarly('tilly-start') === 'all' ? 'all' : 'latest', reminder: lsEarly('tilly-reminder') === 'on' };
   const money = (v) => (v < 0 ? '−' : '') + prefs.currency + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -99,6 +108,7 @@
   // ---------- state ----------
   let sb = null, session = null, mode = null; // mode: 'remote' | 'demo'
   let profiles = [], purchases = [], taxes = [], loaded = false, loadError = false, imported = true, recoveryAt = null;
+  let offline = false, syncing = false, pendingCount = 0;
   let tab = 'home', month = null, filterProfile = 'all', query = '', editing = false, storeSort = 'high', heroShown = null;
   const openCats = new Set();
   const profileById = (id) => profiles.find((p) => p.id === id);
@@ -117,31 +127,114 @@
     }
   }
   const ok = ({ error }) => { if (error) throw error; };
+  // Offline: every signed-in account keeps a copy of its data on the device, and
+  // changes made without a connection wait in an outbox until they can be sent.
+  const userId = () => (session && session.user && session.user.id) || null;
+  const keyFor = (kind) => `tilly-${kind}-${userId()}`;
+  const readJSON = (k, d) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } };
+  const writeJSON = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } };
+  const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => { const r = (crypto.getRandomValues(new Uint8Array(1))[0] % 16); return (c === 'x' ? r : (r & 3) | 8).toString(16); }));
+  const isNetErr = (e) => !navigator.onLine || /fetch|network|load failed|timed? ?out|offline/i.test(String((e && (e.message || e.details)) || e));
+  const outbox = () => readJSON(keyFor('outbox'), []);
+  const TABLES = { sp_profiles: 'profiles', sp_purchases: 'purchases', sp_taxes: 'taxes' };
+  function applyOp(d, op) {
+    const t = TABLES[op.table];
+    if (op.kind === 'insert') { const have = new Set(d[t].map((x) => x.id)); for (const r of op.rows) if (!have.has(r.id)) d[t].push({ ...r }); }
+    else if (op.kind === 'update') d[t] = d[t].map((x) => (x.id === op.id ? { ...x, ...op.patch } : x));
+    else if (op.kind === 'delete') {
+      d[t] = d[t].filter((x) => x.id !== op.id);
+      if (op.table === 'sp_profiles') { d.purchases = d.purchases.filter((x) => x.profile_id !== op.id); d.taxes = d.taxes.filter((x) => x.profile_id !== op.id); }
+    }
+  }
+  async function execOp(op) {
+    if (op.kind === 'insert') ok(await sb.from(op.table).upsert(op.rows.map(({ created_at, ...r }) => (op.table === 'sp_profiles' ? { ...r, created_at } : r)), { onConflict: 'id', ignoreDuplicates: true }));
+    else if (op.kind === 'update') ok(await sb.from(op.table).update(op.patch).eq('id', op.id));
+    else if (op.kind === 'delete') ok(await sb.from(op.table).delete().eq('id', op.id));
+  }
+  // send waiting changes in order; stop at the first network failure and try again later
+  async function flush() {
+    if (syncing || !sb || !userId() || (session && session.offlineOnly)) { pendingCount = outbox().length; return; }
+    syncing = true;
+    try {
+      let box = outbox(), dropped = 0;
+      while (box.length) {
+        try { await execOp(box[0]); }
+        catch (e) { if (isNetErr(e)) { offline = true; break; } console.error('A saved change was refused', e); dropped++; }
+        box = box.slice(1); writeJSON(keyFor('outbox'), box);
+      }
+      pendingCount = box.length;
+      if (dropped) toast(dropped === 1 ? "One change couldn't be saved." : `${dropped} changes couldn't be saved.`);
+    } finally { syncing = false; drawOffline(); }
+  }
+  async function mutate(...ops) {
+    const d = readJSON(keyFor('cache'), null) || { profiles, purchases, taxes, imported, recoveryAt };
+    for (const op of ops) applyOp(d, op);
+    writeJSON(keyFor('cache'), d);
+    writeJSON(keyFor('outbox'), outbox().concat(ops));
+    pendingCount = outbox().length;
+    await flush();
+  }
   const remote = {
     async load() {
-      const [pf, pu, tx, im, rc] = await Promise.all([
-        fetchAll('sp_profiles', 'id, name, color, created_at'),
-        fetchAll('sp_purchases', 'id, profile_id, date, store, item, price, category'),
-        fetchAll('sp_taxes', 'id, profile_id, date, store, tax'),
-        sb.from('sp_imports').select('user_id').maybeSingle(),
-        sb.from('sp_recovery').select('created_at').maybeSingle(),
-      ]);
-      imported = !!(im && im.data);
-      recoveryAt = rc && rc.data ? rc.data.created_at : null;
-      return { profiles: pf.sort((a, b) => a.created_at.localeCompare(b.created_at)), purchases: pu.map((x) => ({ ...x, price: Number(x.price) })), taxes: tx.map((x) => ({ ...x, tax: Number(x.tax) })) };
+      await flush();
+      try {
+        if (session && session.offlineOnly) throw new Error('offline');
+        const [pf, pu, tx, im, rc] = await Promise.all([
+          fetchAll('sp_profiles', 'id, name, color, created_at'),
+          fetchAll('sp_purchases', 'id, profile_id, date, store, item, price, category'),
+          fetchAll('sp_taxes', 'id, profile_id, date, store, tax'),
+          sb.from('sp_imports').select('user_id').maybeSingle(),
+          sb.from('sp_recovery').select('created_at').maybeSingle(),
+        ]);
+        const prev = readJSON(keyFor('cache'), {}) || {};
+        const d = {
+          profiles: pf.sort((a, b) => a.created_at.localeCompare(b.created_at)),
+          purchases: pu.map((x) => ({ ...x, price: Number(x.price) })),
+          taxes: tx.map((x) => ({ ...x, tax: Number(x.tax) })),
+          imported: im && !im.error ? !!im.data : !!prev.imported,
+          recoveryAt: rc && !rc.error ? (rc.data ? rc.data.created_at : null) : prev.recoveryAt || null,
+        };
+        for (const op of outbox()) applyOp(d, op); // changes still on their way
+        writeJSON(keyFor('cache'), d);
+        offline = false;
+        return d;
+      } catch (e) {
+        const d = readJSON(keyFor('cache'), null);
+        if (d && isNetErr(e)) { offline = true; return d; }
+        throw e;
+      }
     },
-    async addProfile(name, color) { ok(await sb.from('sp_profiles').insert({ name, color })); },
-    async updateProfile(id, name, color) { ok(await sb.from('sp_profiles').update({ name, color }).eq('id', id)); },
-    async deleteProfile(id) { ok(await sb.from('sp_profiles').delete().eq('id', id)); },
+    async addProfile(name, color) { await mutate({ kind: 'insert', table: 'sp_profiles', rows: [{ id: uuid(), name, color, created_at: new Date().toISOString() }] }); },
+    async updateProfile(id, name, color) { await mutate({ kind: 'update', table: 'sp_profiles', id, patch: { name, color } }); },
+    async deleteProfile(id) { await mutate({ kind: 'delete', table: 'sp_profiles', id }); },
     async addReceipt({ profile_id, date, store, items, tax }) {
       const receipt = 'r' + Date.now().toString(36);
-      ok(await sb.from('sp_purchases').insert(items.map((i) => ({ profile_id, date, store, item: i.item, price: i.price, category: i.category, receipt }))));
-      if (tax > 0) ok(await sb.from('sp_taxes').insert({ profile_id, date, store, tax, receipt }));
+      const ops = [{ kind: 'insert', table: 'sp_purchases', rows: items.map((i) => ({ id: uuid(), profile_id, date, store, item: i.item, price: i.price, category: i.category, receipt })) }];
+      if (tax > 0) ops.push({ kind: 'insert', table: 'sp_taxes', rows: [{ id: uuid(), profile_id, date, store, tax, receipt }] });
+      await mutate(...ops);
     },
-    async deletePurchase(id) { ok(await sb.from('sp_purchases').delete().eq('id', id)); },
-    async deleteTax(id) { ok(await sb.from('sp_taxes').delete().eq('id', id)); },
-    async setCategory(id, category) { ok(await sb.from('sp_purchases').update({ category }).eq('id', id)); },
+    async deletePurchase(id) { await mutate({ kind: 'delete', table: 'sp_purchases', id }); },
+    async deleteTax(id) { await mutate({ kind: 'delete', table: 'sp_taxes', id }); },
+    async setCategory(id, category) { await mutate({ kind: 'update', table: 'sp_purchases', id, patch: { category } }); },
   };
+  function clearLocalCopy() { try { localStorage.removeItem(keyFor('cache')); localStorage.removeItem(keyFor('outbox')); } catch {} pendingCount = 0; offline = false; }
+  function drawOffline() {
+    const el = $('offline-banner'); if (!el) return;
+    const show = mode === 'remote' && (offline || pendingCount > 0);
+    el.hidden = !show;
+    if (!show) return;
+    el.textContent = offline
+      ? (pendingCount ? `Offline. ${plural(pendingCount, 'change')} saved on this device will sync when you're back online.` : "Offline. Showing what's saved on this device.")
+      : `Syncing ${plural(pendingCount, 'change')}…`;
+  }
+  async function backOnline() {
+    if (mode !== 'remote' || !sb) return;
+    if (session && session.offlineOnly) { try { const { data } = await sb.auth.getSession(); if (data.session) session = data.session; } catch {} }
+    await refresh();
+  }
+  window.addEventListener('online', backOnline);
+  window.addEventListener('offline', () => { if (mode === 'remote') { offline = true; drawOffline(); } });
+  if (Network) Network.addListener('networkStatusChange', (st) => { if (st.connected) backOnline(); else if (mode === 'remote') { offline = true; drawOffline(); } }).catch(() => {});
 
   // ---------- data: demo (made-up sample data, kept in memory only) ----------
   const demoDb = { profiles: [], purchases: [], taxes: [], n: 0 };
@@ -198,6 +291,7 @@
     try {
       const d = await db().load();
       profiles = d.profiles; purchases = d.purchases; taxes = d.taxes;
+      if (mode === 'remote') { imported = !!d.imported; recoveryAt = d.recoveryAt || null; }
       loaded = true; loadError = false;
       const months = monthList();
       if (month == null) month = prefs.start === 'all' ? 'all' : months[0] || 'all';
@@ -208,8 +302,46 @@
       loadError = true;
     }
     render();
+    drawOffline();
+    scheduleReminder();
   }
   const monthList = () => [...new Set([...purchases, ...taxes].map((x) => (x.date || '').slice(0, 7)).filter(Boolean))].sort().reverse();
+
+  // ---------- monthly reminder (phone app) ----------
+  const REMINDER_ID = 4101;
+  async function scheduleReminder() {
+    if (!Notes) return;
+    try {
+      await Notes.cancel({ notifications: [{ id: REMINDER_ID }] });
+      if (!prefs.reminder || mode !== 'remote' || !loaded) return;
+      const now = new Date(), key = iso(now).slice(0, 7), name = MONTHS[now.getMonth()];
+      const ps = purchases.filter((p) => p.date.slice(0, 7) === key), ts = taxes.filter((t) => t.date.slice(0, 7) === key);
+      const top = profiles.map((p) => ({ p, t: sum(ps.filter((x) => x.profile_id === p.id), 'price') })).sort((a, b) => b.t - a.t)[0];
+      const body = ps.length
+        ? `Tilly recorded ${money(r2(sum(ps, 'price') + sum(ts, 'tax')))} for ${name}${top && top.t > 0 && profiles.length > 1 ? `. Top spender: ${top.p.name} (${money(top.t)})` : ''}. Tap to see the breakdown and add any receipts you missed.`
+        : `${name} is over. Add any receipts you still have so your totals stay complete.`;
+      await Notes.schedule({ notifications: [{
+        id: REMINDER_ID, title: `Your ${name} spending`, body,
+        schedule: { at: new Date(now.getFullYear(), now.getMonth() + 1, 1, 9, 0, 0), allowWhileIdle: true },
+        isExactNotification: false, extra: { tab: 'insights', month: key },
+      }] });
+    } catch (e) { console.warn('Could not schedule the monthly reminder', e); }
+  }
+  if (Notes) Notes.addListener('localNotificationActionPerformed', (a) => {
+    const ex = a && a.notification && a.notification.extra;
+    if (ex && mode === 'remote') { if (ex.month) month = ex.month; setTab(ex.tab || 'insights'); }
+  }).catch(() => {});
+  async function setReminder(on) {
+    if (on && Notes) {
+      let st = await Notes.checkPermissions().catch(() => ({ display: 'denied' }));
+      if (st.display !== 'granted') st = await Notes.requestPermissions().catch(() => ({ display: 'denied' }));
+      if (st.display !== 'granted') { toast("Notifications are off for Tilly. Turn them on in your phone's Settings."); on = false; }
+    }
+    setPref('reminder', on ? 'on' : 'off'); prefs.reminder = on;
+    await scheduleReminder();
+    if (on) toast('Reminder set for the 1st of next month');
+    render();
+  }
 
   // ---------- shared view pieces ----------
   const avatar = (name, c, cls = '') => h('span', { class: 'avatar ' + cls, c, text: initial(name), 'aria-hidden': 'true' });
@@ -276,6 +408,25 @@
     requestAnimationFrame(step);
   }
 
+  // In the first week of a month, Home shows a short recap of the month before.
+  function recapCard() {
+    const now = new Date();
+    if (now.getDate() > 7) return null;
+    const last = new Date(now.getFullYear(), now.getMonth() - 1, 1), key = iso(last).slice(0, 7);
+    if (ls.get('tilly-recap-seen') === key + ':' + (userId() || mode)) return null;
+    const ps = purchases.filter((p) => p.date.slice(0, 7) === key);
+    if (!ps.length) return null;
+    const total = r2(sum(ps, 'price') + sum(taxes.filter((t) => t.date.slice(0, 7) === key), 'tax'));
+    const parts = profiles.map((p) => ({ p, t: sum(ps.filter((x) => x.profile_id === p.id), 'price') })).filter((x) => x.t > 0).sort((a, b) => b.t - a.t);
+    const el = h('section', { class: 'card recap' },
+      h('div', { class: 'recap-top' }, h('span', { class: 'recap-kicker', text: `${MONTHS[last.getMonth()]} recap` }),
+        h('button', { class: 'x small', 'aria-label': 'Hide recap', text: '×', onclick: () => { ls.set('tilly-recap-seen', key + ':' + (userId() || mode)); el.remove(); } })),
+      h('p', { class: 'recap-num', text: money(total) }),
+      h('p', { class: 'note', text: parts.slice(0, 3).map((x) => `${x.p.name} ${money(x.t)}`).join(' · ') + (parts.length > 3 ? ' · …' : '') }),
+      h('button', { class: 'btn ghost small', style: { marginTop: '10px' }, text: `See ${MONTHS[last.getMonth()]}`, onclick: () => { month = key; setTab('insights'); } }));
+    return el;
+  }
+
   // ---------- HOME ----------
   function viewHome() {
     const out = [];
@@ -308,6 +459,7 @@
       h('div', { class: 'barcode', 'aria-hidden': 'true' })));
     animateNumber(num, r2(items + tax));
 
+    const recap = recapCard(); if (recap) out.push(recap);
     out.push(h('div', { class: 'section-head' }, h('h2', { class: 'section-title', text: 'Profiles' }), h('span', { class: 'note', text: 'Before tax' })));
     const max = Math.max(1, ...totals.map((t) => t.total));
     out.push(h('div', { class: 'tiles' },
@@ -492,6 +644,10 @@
       card('Preferences', 'Saved on this device.',
         setRow('Currency symbol', null, (() => { const sel = h('select', { class: 'set-select', 'aria-label': 'Currency symbol' }, CURRENCIES.map((c) => new Option(c, c))); sel.value = prefs.currency; sel.addEventListener('change', () => { setPref('currency', sel.value); heroShown = null; render(); }); return sel; })()),
         setRow('Open on', 'Which month shows first when you open Tilly.', segPick('Open on', [['latest', 'Latest month'], ['all', 'All time']], prefs.start, (k) => { setPref('start', k); month = k === 'all' ? 'all' : monthList()[0] || 'all'; render(); }))),
+      card('Notifications', null,
+        NATIVE
+          ? setRow('Monthly reminder', "On the 1st at 9 AM, with last month's total.", segPick('Monthly reminder', [['off', 'Off'], ['on', 'On']], prefs.reminder ? 'on' : 'off', (k) => setReminder(k === 'on')))
+          : setRow('Monthly reminder', 'Get it in the Tilly phone app. Here, Home shows a recap of last month during the first week.', null)),
       card('Your data', null,
         setRow('Export', 'Download every receipt as a spreadsheet file (CSV).', h('button', { class: 'btn ghost small', text: 'Export', disabled: !purchases.length, onclick: exportCsv }))),
     ];
@@ -507,11 +663,13 @@
     out.push(card('Account', null,
       !recoveryAt ? h('p', { class: 'warn-note', style: { marginBottom: '12px' }, text: "You don't have a recovery code yet. Create one so you can reset your password if you forget it." }) : null,
       setRow('Email', (session && session.user && session.user.email) || '', null),
-      setRow('Password', null, h('button', { class: 'btn ghost small', text: 'Change', onclick: () => { $('pw-new').value = ''; $('pw-again').value = ''; $('pw-err').textContent = ''; openSheet('sheet-password'); $('pw-new').focus(); } })),
+      setRow('Password', null, h('button', { class: 'btn ghost small', text: 'Change', onclick: () => openPasswordSheet(false) })),
       setRow('Recovery code', recoveryAt ? `Created ${fmtDate(recoveryAt.slice(0, 10))}. Use it to reset a forgotten password.` : 'Not set up yet.', codeBtn),
       setRow('Sign out', 'On this device.', h('button', { class: 'btn ghost small', text: 'Sign out', onclick: signOut })),
       setRow('Delete account', 'Removes your account, profiles and every receipt for good.', armButton('danger-link', 'Delete', 'Tap again to delete everything', async () => {
         await callAccount('delete_account', { confirm: 'DELETE' }, true);
+        clearLocalCopy();
+        if (Notes) Notes.cancel({ notifications: [{ id: REMINDER_ID }] }).catch(() => {});
         try { await sb.auth.signOut({ scope: 'local' }); } catch {}
         session = null; mode = null; showAuth('up'); toast('Your account was deleted');
       }))));
@@ -638,12 +796,50 @@
     drawAddWho();
     openSheet('sheet-add');
   });
+  function setPhoto(blob) {
+    photo = blob;
+    const img = $('preview-img'); if (img.src && img.src.startsWith('blob:')) URL.revokeObjectURL(img.src); img.src = URL.createObjectURL(blob);
+    $('preview').hidden = false; $('scan-status').textContent = ''; $('scan-status').className = 'status';
+    $('scan').click(); // start reading right away
+  }
   function onPhoto(e) {
     const f = e.target.files && e.target.files[0]; e.target.value = '';
-    if (!f) return;
-    photo = f;
-    const img = $('preview-img'); if (img.src) URL.revokeObjectURL(img.src); img.src = URL.createObjectURL(f);
-    $('preview').hidden = false; $('scan-status').textContent = ''; $('scan-status').className = 'status';
+    if (f) setPhoto(f);
+  }
+  // Phone app: the native camera (on Android, Google's document scanner, which finds
+  // the receipt's edges and flattens it), or the photo library.
+  async function nativePhoto(source) {
+    const cancelled = (e) => /cancel|0006|0011|no image|not selected/i.test(String((e && (e.message || e.code)) || ''));
+    try {
+      let uri = null;
+      if (source === 'camera' && DocScanner) {
+        try {
+          const { available } = await DocScanner.isGoogleDocumentScannerModuleAvailable();
+          if (available) {
+            const r = await DocScanner.scanDocument({ galleryImportAllowed: false, pageLimit: 1, resultFormats: 'JPEG', scannerMode: 'FULL' });
+            uri = r.scannedImages && r.scannedImages[0];
+            if (!uri) return;
+          } else DocScanner.installGoogleDocumentScannerModule().catch(() => {});
+        } catch (e) { if (cancelled(e)) return; }
+      }
+      if (!uri) {
+        const r = source === 'camera'
+          ? await Camera.takePhoto({ quality: 85, correctOrientation: true, editable: 'in-app' })
+          : ((await Camera.chooseFromGallery({ mediaType: 0, limit: 1, editable: 'in-app', quality: 85 })).results || [])[0];
+        if (!r) return;
+        uri = r.webPath || r.uri;
+      }
+      const blob = await fetch(Cap.convertFileSrc(uri)).then((res) => res.blob());
+      setPhoto(blob);
+    } catch (e) {
+      if (cancelled(e)) return;
+      const denied = /denied|permission|0003|0005/i.test(String((e && (e.message || e.code)) || ''));
+      toast(denied ? `Tilly needs ${source === 'camera' ? 'camera' : 'photo'} access. Turn it on in your phone's Settings.` : "Couldn't get the photo. Try again, or type the items.");
+    }
+  }
+  if (NATIVE && Camera) {
+    document.querySelector('label[for="cam"]').addEventListener('click', (e) => { e.preventDefault(); nativePhoto('camera'); });
+    document.querySelector('label[for="pick"]').addEventListener('click', (e) => { e.preventDefault(); nativePhoto('gallery'); });
   }
   $('cam').addEventListener('change', onPhoto);
   $('pick').addEventListener('change', onPhoto);
@@ -711,7 +907,7 @@
     const date = $('r-date').value, who = profileById(addFor);
     try {
       await db().addReceipt({ profile_id: addFor, date, store: $('r-store').value.trim(), items: lines.map((l) => ({ item: l.item, price: r2(l.price), category: l.category })), tax: r2(Number($('r-tax').value) || 0) });
-      closeSheets(); toast(`Added ${plural(lines.length, 'item')} to ${who ? who.name : 'profile'}`);
+      closeSheets(); toast(offline ? `Saved on this device. It will sync when you're back online.` : `Added ${plural(lines.length, 'item')} to ${who ? who.name : 'profile'}`);
       if (month !== 'all') month = date.slice(0, 7);
       await refresh();
     } catch { st.className = 'status err'; st.textContent = "Couldn't add the receipt. Check your connection and try again."; btn.disabled = false; }
@@ -768,18 +964,44 @@
     }
     btn.disabled = false; btn.textContent = label;
   });
+  let resetMode = 'email';
+  function drawResetMode() {
+    const code = resetMode === 'code';
+    $('code-fields').hidden = !code;
+    $('reset-intro').textContent = code ? 'Enter the recovery code you saved when you created your account. It looks like ABCD-EFGH-JKMN-PQRS.' : "We'll email you a link to choose a new password.";
+    $('reset-submit').textContent = code ? 'Set new password' : 'Email me a reset link';
+    $('reset-toggle').textContent = code ? 'Email me a link instead' : 'Use a recovery code instead';
+    $('reset-err').textContent = ''; $('reset-ok').textContent = '';
+  }
+  $('reset-toggle').addEventListener('click', () => { resetMode = resetMode === 'code' ? 'email' : 'code'; drawResetMode(); (resetMode === 'code' ? $('reset-code') : $('reset-email')).focus(); });
   $('forgot').addEventListener('click', () => {
-    $('reset-email').value = $('email').value.trim(); $('reset-code').value = ''; $('reset-pass').value = ''; $('reset-err').textContent = '';
-    openSheet('sheet-reset'); ($('reset-email').value ? $('reset-code') : $('reset-email')).focus();
+    resetMode = 'email'; drawResetMode();
+    $('reset-email').value = $('email').value.trim(); $('reset-code').value = ''; $('reset-pass').value = '';
+    openSheet('sheet-reset'); $('reset-email').focus();
   });
   $('reset-form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const email = $('reset-email').value.trim(), code = $('reset-code').value.trim(), password = $('reset-pass').value, err = $('reset-err'), btn = $('reset-submit');
+    const email = $('reset-email').value.trim(), err = $('reset-err'), okEl = $('reset-ok'), btn = $('reset-submit');
+    err.textContent = ''; okEl.textContent = '';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { err.textContent = 'Enter the email for your account.'; return; }
+    if (!sb) { err.textContent = "Couldn't reach Tilly. Check your connection and reload."; return; }
+    if (resetMode === 'email') {
+      btn.disabled = true;
+      try {
+        const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: RESET_URL });
+        if (error) throw error;
+        okEl.textContent = `If ${email} has a Tilly account, a reset link is on its way. Open it on any device. It can take a minute, so check spam too.`;
+      } catch (x) {
+        const m = String((x && x.message) || '');
+        err.textContent = /rate|too many|seconds/i.test(m) ? 'Too many reset emails. Wait a few minutes and try again.' : "Couldn't send the email right now. Try again, or use your recovery code.";
+      }
+      btn.disabled = false;
+      return;
+    }
+    const code = $('reset-code').value.trim(), password = $('reset-pass').value;
     if (code.replace(/[^A-Za-z0-9]/g, '').length !== 16) { err.textContent = 'The recovery code has 16 letters and numbers.'; return; }
     if (password.length < 8) { err.textContent = 'Use a password with at least 8 characters.'; return; }
-    if (!sb) { err.textContent = "Couldn't reach Tilly. Check your connection and reload."; return; }
-    btn.disabled = true; err.textContent = '';
+    btn.disabled = true;
     try {
       const d = await callAccount('reset_password', { email, code, password });
       const { data, error } = await sb.auth.signInWithPassword({ email, password });
@@ -793,6 +1015,11 @@
     }
     btn.disabled = false;
   });
+  function openPasswordSheet(fromLink) {
+    $('pw-title').textContent = fromLink ? 'Choose a new password' : 'Change password';
+    $('pw-new').value = ''; $('pw-again').value = ''; $('pw-err').textContent = '';
+    openSheet('sheet-password'); $('pw-new').focus();
+  }
   $('pw-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const a = $('pw-new').value, b = $('pw-again').value, err = $('pw-err'), btn = $('pw-submit');
@@ -809,22 +1036,67 @@
   $('try-demo').addEventListener('click', () => { seedDemo(); mode = 'demo'; enterApp(); });
   $('demo-signup').addEventListener('click', () => leaveDemo(true));
   function leaveDemo(signup) { mode = null; showAuth(signup ? 'up' : null); if (signup) $('email').focus(); }
-  async function signOut() { try { await sb.auth.signOut(); } catch {} session = null; mode = null; showAuth('in'); }
+  let signOutArmed = false;
+  async function signOut() {
+    if (pendingCount > 0 && !signOutArmed) {
+      signOutArmed = true; setTimeout(() => (signOutArmed = false), 6000);
+      toast(`${plural(pendingCount, 'change')} hasn't synced yet. Go online first, or tap Sign out again to discard.`);
+      return;
+    }
+    signOutArmed = false;
+    clearLocalCopy();
+    if (Notes) Notes.cancel({ notifications: [{ id: REMINDER_ID }] }).catch(() => {});
+    try { await sb.auth.signOut({ scope: 'local' }); } catch {}
+    session = null; mode = null; drawOffline(); showAuth('in');
+  }
+
+  // ---------- phone app: back button and coming back to the app ----------
+  const AppPlugin = plugin('App');
+  if (AppPlugin) {
+    AppPlugin.addListener('backButton', () => {
+      const open = [...document.querySelectorAll('.sheet-bg')].find((x) => !x.hidden);
+      if (open) { if (!('sticky' in open.dataset)) closeSheets(); return; }
+      if (!$('app').hidden && tab !== 'home') { setTab('home'); return; }
+      AppPlugin.exitApp();
+    }).catch(() => {});
+    AppPlugin.addListener('appStateChange', (st) => { if (st.isActive && mode === 'remote') backOnline(); }).catch(() => {});
+  }
 
   // ---------- start ----------
   drawAuthMode();
   (async () => {
+    const fromResetLink = /type=recovery/.test(location.hash + location.search);
+    let recovering = false;
     if (window.supabase && window.supabase.createClient) {
-      sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { flowType: 'implicit', detectSessionInUrl: !NATIVE } });
+      sb.auth.onAuthStateChange((evt, s) => {
+        if (evt === 'PASSWORD_RECOVERY') recovering = true;
+        if (mode !== 'remote') return;
+        if (s) session = s;
+        if (evt === 'SIGNED_OUT') { session = null; mode = null; showAuth('in'); }
+      });
       try {
-        const { data } = await sb.auth.getSession();
+        const { data, error } = await sb.auth.getSession();
         session = data.session;
-        sb.auth.onAuthStateChange((evt, s) => { if (mode !== 'remote') return; session = s; if (evt === 'SIGNED_OUT') { mode = null; showAuth('in'); } });
+        // Offline with an expired sign-in: open the copy saved on this device instead of
+        // the sign-in screen, and finish signing in once the connection is back.
+        if (!session && (!navigator.onLine || (error && isNetErr(error)))) {
+          const stored = readJSON('sb-uvbadnjcisuzgypzqyub-auth-token', null);
+          const u = stored && (stored.user || (stored.currentSession && stored.currentSession.user));
+          if (u && readJSON(`tilly-cache-${u.id}`, null)) session = { user: u, access_token: stored.access_token, offlineOnly: true };
+        }
       } catch {}
+      if (/access_token=|type=recovery/.test(location.hash)) history.replaceState(null, '', location.pathname + location.search);
     }
-    if (session) { mode = 'remote'; enterApp(); }
+    if (session) {
+      mode = 'remote'; enterApp();
+      if (recovering || fromResetLink) { openPasswordSheet(true); toast('Signed in from your reset link'); }
+    }
     else if (location.hash === '#demo') { seedDemo(); mode = 'demo'; enterApp(); }
-    else showAuth();
+    else {
+      showAuth();
+      if (fromResetLink) { $('auth-err').textContent = 'That reset link has expired or was already used. Request a new one.'; }
+    }
   })();
-  if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((r) => r.update()).catch(() => {});
+  if (!NATIVE && 'serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((r) => r.update()).catch(() => {});
 })();

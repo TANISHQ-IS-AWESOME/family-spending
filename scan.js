@@ -1,4 +1,5 @@
-// Free on-device receipt scanner: reads the photo with Tesseract in the browser,
+// Free on-device receipt scanner: reads the photo with Tesseract (bundled in vendor/, so it
+// works offline on the web and inside the phone app),
 // then turns the text into store, date, items, tax and total.
 window.Scan = (() => {
   const r2 = (x) => Math.round(x * 100) / 100;
@@ -8,7 +9,7 @@ window.Scan = (() => {
     if (window.Tesseract) return Promise.resolve();
     return new Promise((res, rej) => {
       const s = document.createElement('script');
-      s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+      s.src = 'vendor/tesseract/tesseract.min.js';
       s.onload = res; s.onerror = () => rej({ code: 'ocr_load' });
       document.head.appendChild(s);
     });
@@ -16,7 +17,11 @@ window.Scan = (() => {
   async function getWorker() {
     if (ocrWorker) return ocrWorker;
     await loadTesseract();
+    const local = (p) => new URL('vendor/tesseract/' + p, location.href).href;
     ocrWorker = await Tesseract.createWorker('eng', 1, {
+      workerPath: local('worker.min.js'),
+      corePath: local('core'),
+      langPath: local('lang'),
       logger: (m) => { if (ocrProgress && m.status) ocrProgress(m.status, m.progress || 0); },
     });
     await ocrWorker.setParameters({ preserve_interword_spaces: '1' });
@@ -157,6 +162,7 @@ window.Scan = (() => {
 
 
   async function scan(file, onProgress) {
+    if (typeof file === 'string') file = await fetch(file).then((r) => r.blob());
     ocrProgress = onProgress || null;
     try {
       const [worker, canvas] = await Promise.all([getWorker(), prepImage(file).catch(() => { throw { code: 'image_rejected' }; })]);

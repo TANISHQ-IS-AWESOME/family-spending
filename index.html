@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap">
 <script>try{var t=localStorage.getItem('tilly-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
-<link rel="stylesheet" href="app.css?v=202611142025">
+<link rel="stylesheet" href="app.css?v=202611142037">
 </head>
 <body>
 
@@ -73,6 +73,7 @@
     <div class="brand"><span class="mark" aria-hidden="true"></span><span class="word">Tilly</span></div>
     <label class="pill-select" for="month"><select id="month" aria-label="Month"></select></label>
   </header>
+  <div class="offline-banner" id="offline-banner" hidden role="status"></div>
   <div class="demo-banner" id="demo-banner" hidden>
     <span><strong>Demo.</strong> This is sample data and nothing is saved.</span>
     <button class="btn tiny" id="demo-signup">Create account</button>
@@ -152,13 +153,16 @@
 <div class="sheet-bg" id="sheet-reset" hidden>
   <form class="sheet" role="dialog" aria-modal="true" aria-labelledby="reset-title" id="reset-form" novalidate>
     <div class="sheet-head"><h2 id="reset-title">Reset your password</h2><button class="x" type="button" data-close aria-label="Close">×</button></div>
-    <p class="note">Enter the recovery code you saved when you created your account. It looks like ABCD-EFGH-JKMN-PQRS.</p>
+    <p class="note" id="reset-intro">We'll email you a link to choose a new password.</p>
     <label class="field" for="reset-email">Email<input class="input" id="reset-email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com" required></label>
-    <label class="field" for="reset-code">Recovery code<input class="input mono" id="reset-code" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX" maxlength="24" required></label>
-    <label class="field" for="reset-pass">New password<input class="input" id="reset-pass" type="password" autocomplete="new-password" placeholder="At least 8 characters" minlength="8" required></label>
+    <div class="code-fields" id="code-fields" hidden>
+      <label class="field" for="reset-code">Recovery code<input class="input mono" id="reset-code" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX" maxlength="24"></label>
+      <label class="field" for="reset-pass">New password<input class="input" id="reset-pass" type="password" autocomplete="new-password" placeholder="At least 8 characters" minlength="8"></label>
+    </div>
     <p class="status err" id="reset-err" aria-live="polite"></p>
-    <button class="btn primary" type="submit" id="reset-submit">Set new password</button>
-    <p class="fine">No code? Recovery by email isn't available yet, so an account without its code can't be reset.</p>
+    <p class="status ok" id="reset-ok" aria-live="polite"></p>
+    <button class="btn primary" type="submit" id="reset-submit">Email me a reset link</button>
+    <button class="text-btn center" type="button" id="reset-toggle">Use a recovery code instead</button>
   </form>
 </div>
 
@@ -186,8 +190,9 @@
 
 <div class="toast" id="toast" hidden role="status"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="scan.js?v=202611142025"></script>
-<script src="app.js?v=202611142025"></script>
+<script src="vendor/capacitor.js?v=202611142037"></script>
+<script src="vendor/supabase.js?v=202611142037"></script>
+<script src="scan.js?v=202611142037"></script>
+<script src="app.js?v=202611142037"></script>
 </body>
 </html>

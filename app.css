@@ -368,3 +368,16 @@ svg.ic { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-wid
 .warn-note { background: var(--bad-soft); color: var(--bad); border-radius: 12px; padding: 10px 12px; font-size: .86rem; font-weight: 600; }
 .forgot { font-size: .88rem; padding: 0; margin-top: -6px; }
 .codebox { background: var(--paper); border: 2px dashed var(--dash); border-radius: 14px; padding: 18px 12px; text-align: center; font-size: clamp(1.05rem, 5.2vw, 1.4rem); letter-spacing: .06em; font-weight: 500; user-select: all; -webkit-user-select: all; overflow-wrap: anywhere; }
+
+/* offline, recap, reset */
+.offline-banner { background: var(--accent-soft); color: var(--ink); border-radius: 14px; padding: 10px 14px 10px 36px; font-size: .86rem; font-weight: 600; position: relative; }
+.offline-banner::before { content: ""; position: absolute; left: 14px; top: 50%; width: 10px; height: 10px; margin-top: -5px; border-radius: 50%; background: var(--accent); }
+.recap { background: linear-gradient(135deg, var(--accent-soft), var(--panel) 70%); }
+.recap-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.recap-kicker { font-size: .74rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); }
+.recap-num { font-family: var(--f-mono); font-weight: 500; font-size: 2rem; letter-spacing: -.03em; margin: 4px 0 2px; }
+.x.small { width: 32px; height: 32px; font-size: 1.1rem; }
+.status.ok { color: var(--good); }
+.status:empty { display: none; }
+.code-fields { display: flex; flex-direction: column; gap: 14px; }
+.text-btn.center { align-self: center; text-align: center; }
