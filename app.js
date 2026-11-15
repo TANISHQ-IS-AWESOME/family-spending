@@ -47,6 +47,9 @@
     bill: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h4"/>',
     car: '<path d="M5 16V11l2-5h10l2 5v5"/><path d="M4 16h16v3H4z"/>',
     wrench: '<path d="M14.5 5.5a4 4 0 0 0-5.2 5.2L4 16l4 4 5.3-5.3a4 4 0 0 0 5.2-5.2l-2.6 2.6-2.4-.6-.6-2.4z"/>',
+    repeat: '<path d="M17 2l3 3-3 3"/><path d="M4 11V9a4 4 0 0 1 4-4h16"/><path d="M7 22l-3-3 3-3"/><path d="M20 13v2a4 4 0 0 1-4 4H4"/>',
+    up: '<path d="M7 14l5-5 5 5"/>',
+    down: '<path d="M7 10l5 5 5-5"/>',
     dots: '<circle cx="6" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="18" cy="12" r="1.4"/>',
   };
   function icon(name) {
@@ -99,6 +102,7 @@
   const fmtMonth = (k) => { if (k === 'all') return 'All time'; const [y, m] = k.split('-').map(Number); return `${MONTHS[m - 1]} ${y}`; };
   const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const sum = (arr, f) => r2(arr.reduce((s, x) => s + Number(x[f] || 0), 0));
+  const compact = (v) => (Math.abs(v) >= 1e6 ? (v / 1e6).toFixed(1).replace(/\.0$/, '') + 'M' : Math.abs(v) >= 1e4 ? Math.round(v / 1e3) + 'k' : Math.abs(v) >= 1e3 ? (v / 1e3).toFixed(1).replace(/\.0$/, '') + 'k' : Math.round(v).toString());
   const pct = (a, b) => (b > 0 ? Math.round((a / b) * 100) : 0);
   const initial = (s) => ((s || '?').replace(/[^\p{L}\p{N}]/gu, '')[0] || '?').toUpperCase();
   const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
@@ -136,7 +140,7 @@
 
   // ---------- state ----------
   let sb = null, session = null, mode = null; // mode: 'remote' | 'demo'
-  let profiles = [], purchases = [], taxes = [], loaded = false, loadError = false, imported = true, recoveryAt = null;
+  let profiles = [], purchases = [], taxes = [], subscriptions = [], loaded = false, loadError = false, imported = true, recoveryAt = null;
   let offline = false, syncing = false, pendingCount = 0;
   let tab = 'home', month = null, filterProfile = 'all', query = '', editing = false, storeSort = 'high', heroShown = null;
   const openCats = new Set();
@@ -165,14 +169,15 @@
   const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => { const r = (crypto.getRandomValues(new Uint8Array(1))[0] % 16); return (c === 'x' ? r : (r & 3) | 8).toString(16); }));
   const isNetErr = (e) => !navigator.onLine || /fetch|network|load failed|timed? ?out|offline/i.test(String((e && (e.message || e.details)) || e));
   const outbox = () => readJSON(keyFor('outbox'), []);
-  const TABLES = { sp_profiles: 'profiles', sp_purchases: 'purchases', sp_taxes: 'taxes' };
+  const TABLES = { sp_profiles: 'profiles', sp_purchases: 'purchases', sp_taxes: 'taxes', sp_subscriptions: 'subscriptions' };
   function applyOp(d, op) {
     const t = TABLES[op.table];
+    d[t] = d[t] || [];
     if (op.kind === 'insert') { const have = new Set(d[t].map((x) => x.id)); for (const r of op.rows) if (!have.has(r.id)) d[t].push({ ...r }); }
     else if (op.kind === 'update') d[t] = d[t].map((x) => (x.id === op.id ? { ...x, ...op.patch } : x));
     else if (op.kind === 'delete') {
       d[t] = d[t].filter((x) => x.id !== op.id);
-      if (op.table === 'sp_profiles') { d.purchases = d.purchases.filter((x) => x.profile_id !== op.id); d.taxes = d.taxes.filter((x) => x.profile_id !== op.id); }
+      if (op.table === 'sp_profiles') { d.purchases = d.purchases.filter((x) => x.profile_id !== op.id); d.taxes = d.taxes.filter((x) => x.profile_id !== op.id); d.subscriptions = (d.subscriptions || []).filter((x) => x.profile_id !== op.id); }
     }
   }
   async function execOp(op) {
@@ -196,7 +201,7 @@
     } finally { syncing = false; drawOffline(); }
   }
   async function mutate(...ops) {
-    const d = readJSON(keyFor('cache'), null) || { profiles, purchases, taxes, imported, recoveryAt };
+    const d = readJSON(keyFor('cache'), null) || { profiles, purchases, taxes, subscriptions, imported, recoveryAt };
     for (const op of ops) applyOp(d, op);
     writeJSON(keyFor('cache'), d);
     writeJSON(keyFor('outbox'), outbox().concat(ops));
@@ -208,18 +213,20 @@
       await flush();
       try {
         if (session && session.offlineOnly) throw new Error('offline');
-        const [pf, pu, tx, im, rc] = await Promise.all([
+        const [pf, pu, tx, im, rc, su] = await Promise.all([
           fetchAll('sp_profiles', 'id, name, color, created_at'),
-          fetchAll('sp_purchases', 'id, profile_id, date, store, item, price, category'),
+          fetchAll('sp_purchases', 'id, profile_id, date, store, item, price, category, receipt'),
           fetchAll('sp_taxes', 'id, profile_id, date, store, tax'),
           sb.from('sp_imports').select('user_id').maybeSingle(),
           sb.from('sp_recovery').select('created_at').maybeSingle(),
+          fetchAll('sp_subscriptions', 'id, profile_id, name, amount, cadence, start_date, category, active, charged_through, created_at').catch(() => null),
         ]);
         const prev = readJSON(keyFor('cache'), {}) || {};
         const d = {
           profiles: pf.sort((a, b) => a.created_at.localeCompare(b.created_at)),
           purchases: pu.map((x) => ({ ...x, price: Number(x.price) })),
           taxes: tx.map((x) => ({ ...x, tax: Number(x.tax) })),
+          subscriptions: su ? su.map((x) => ({ ...x, amount: Number(x.amount) })).sort((a, b) => a.created_at.localeCompare(b.created_at)) : prev.subscriptions || [],
           imported: im && !im.error ? !!im.data : !!prev.imported,
           recoveryAt: rc && !rc.error ? (rc.data ? rc.data.created_at : null) : prev.recoveryAt || null,
         };
@@ -245,6 +252,13 @@
     async deletePurchase(id) { await mutate({ kind: 'delete', table: 'sp_purchases', id }); },
     async deleteTax(id) { await mutate({ kind: 'delete', table: 'sp_taxes', id }); },
     async setCategory(id, category) { await mutate({ kind: 'update', table: 'sp_purchases', id, patch: { category } }); },
+    async addSub(row) { await mutate({ kind: 'insert', table: 'sp_subscriptions', rows: [{ id: uuid(), created_at: new Date().toISOString(), charged_through: null, ...row }] }); },
+    async updateSub(id, patch) { await mutate({ kind: 'update', table: 'sp_subscriptions', id, patch }); },
+    async deleteSub(id) { await mutate({ kind: 'delete', table: 'sp_subscriptions', id }); },
+    async charge(due, through) {
+      await mutate(...due.map(({ sub, dates }) => ({ kind: 'insert', table: 'sp_purchases', rows: dates.map((date) => chargeRow(sub, date)) })),
+        ...due.map(({ sub }) => ({ kind: 'update', table: 'sp_subscriptions', id: sub.id, patch: { charged_through: through } })));
+    },
   };
   function clearLocalCopy() { try { localStorage.removeItem(keyFor('cache')); localStorage.removeItem(keyFor('outbox')); } catch {} pendingCount = 0; offline = false; }
   function drawOffline() {
@@ -265,11 +279,55 @@
   window.addEventListener('offline', () => { if (mode === 'remote') { offline = true; drawOffline(); } });
   if (Network) Network.addListener('networkStatusChange', (st) => { if (st.connected) backOnline(); else if (mode === 'remote') { offline = true; drawOffline(); } }).catch(() => {});
 
+  // ---------- subscriptions: schedule ----------
+  // Each subscription repeats from its first charge date. When the app loads, every charge that has
+  // come due since the last check is added to Receipts, and charged_through moves up to today.
+  const CADENCE = { weekly: { word: 'Every week', per: 'wk', mo: 52 / 12 }, monthly: { word: 'Every month', per: 'mo', mo: 1 }, yearly: { word: 'Every year', per: 'yr', mo: 1 / 12 } };
+  const parseIso = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+  const addDays = (s, n) => { const d = parseIso(s); d.setDate(d.getDate() + n); return iso(d); };
+  function occurrence(sub, k) {
+    const s = parseIso(sub.start_date);
+    if (sub.cadence === 'weekly') { s.setDate(s.getDate() + 7 * k); return iso(s); }
+    const months = sub.cadence === 'yearly' ? 12 * k : k, day = s.getDate();
+    const d = new Date(s.getFullYear(), s.getMonth() + months, 1);
+    d.setDate(Math.min(day, new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()));
+    return iso(d);
+  }
+  // charge dates after `after` (exclusive) up to `to` (inclusive)
+  function occurrencesBetween(sub, after, to, limit = 520) {
+    const out = [];
+    for (let k = 0; k < 5000 && out.length < limit; k++) { const d = occurrence(sub, k); if (d > to) break; if (d > after) out.push(d); }
+    return out;
+  }
+  const lastChecked = (sub) => sub.charged_through || addDays(sub.start_date, -1);
+  // the first charge still to come (today counts if it hasn't been added yet)
+  function nextCharge(sub) {
+    if (!sub.active) return null;
+    const y = addDays(iso(new Date()), -1), after = lastChecked(sub) > y ? lastChecked(sub) : y;
+    return occurrencesBetween(sub, after, '9999-12-31', 1)[0] || null;
+  }
+  function dueCharges(profs) {
+    const today = iso(new Date()), ids = new Set(profs.map((p) => p.id));
+    return subscriptions.filter((s) => s.active && ids.has(s.profile_id)).map((sub) => ({ sub, dates: occurrencesBetween(sub, lastChecked(sub), today) })).filter((x) => x.dates.length);
+  }
+  // the same charge always gets the same id, so two devices can't add it twice
+  function stableId(text) {
+    let hex = '';
+    for (const seed of [0x811c9dc5, 0x01000193, 0x9e3779b9, 0x85ebca6b]) {
+      let x = seed >>> 0;
+      for (let i = 0; i < text.length; i++) { x ^= text.charCodeAt(i); x = Math.imul(x, 0x01000193) >>> 0; }
+      hex += x.toString(16).padStart(8, '0');
+    }
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-${'89ab'[parseInt(hex[16], 16) % 4]}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+  }
+  const chargeRow = (sub, date) => ({ id: mode === 'demo' ? 'c' + sub.id + date : stableId(sub.id + '|' + date), profile_id: sub.profile_id, date, store: sub.name, item: `${sub.name} (${CADENCE[sub.cadence].word.toLowerCase()})`, price: sub.amount, category: sub.category, receipt: 'sub:' + sub.id });
+  const isSubCharge = (p) => String(p.receipt || '').startsWith('sub:');
+
   // ---------- data: demo (made-up sample data, kept in memory only) ----------
-  const demoDb = { profiles: [], purchases: [], taxes: [], n: 0 };
+  const demoDb = { profiles: [], purchases: [], taxes: [], subscriptions: [], n: 0 };
   const did = () => 'd' + (++demoDb.n);
   function seedDemo() {
-    demoDb.profiles = []; demoDb.purchases = []; demoDb.taxes = []; demoDb.n = 0;
+    demoDb.profiles = []; demoDb.purchases = []; demoDb.taxes = []; demoDb.subscriptions = []; demoDb.n = 0;
     const [maya, jordan, house] = [['Maya', 'pink'], ['Jordan', 'blue'], ['Household', 'green']].map(([name, color], i) => {
       const p = { id: did(), name, color, created_at: '2026-01-0' + (i + 1) }; demoDb.profiles.push(p); return p.id;
     });
@@ -300,12 +358,16 @@
       for (const [item, price] of items) demoDb.purchases.push({ id: did(), profile_id, date, store, item, price, category: guessCategory(item, store) });
       if (tax) demoDb.taxes.push({ id: did(), profile_id, date, store, tax });
     }
+    for (const [profile_id, name, amount, cadence, back, d, category] of [
+      [house, 'Streaming service', 15.49, 'monthly', 3, 3, 'Bills'], [maya, 'Music app', 10.99, 'monthly', 2, 8, 'Bills'],
+      [jordan, 'Lunch plan', 12.00, 'weekly', 1, 6, 'Food & dining'], [jordan, 'Cloud storage', 29.99, 'yearly', 11, 20, 'Bills']])
+      demoDb.subscriptions.push({ id: did(), profile_id, name, amount, cadence, start_date: day(back, d), category, active: true, charged_through: null, created_at: '2026-01-05' });
   }
   const demo = {
-    async load() { return { profiles: demoDb.profiles.slice(), purchases: demoDb.purchases.slice(), taxes: demoDb.taxes.slice() }; },
+    async load() { return { profiles: demoDb.profiles.slice(), purchases: demoDb.purchases.slice(), taxes: demoDb.taxes.slice(), subscriptions: demoDb.subscriptions.map((x) => ({ ...x })) }; },
     async addProfile(name, color) { demoDb.profiles.push({ id: did(), name, color, created_at: new Date().toISOString() }); },
     async updateProfile(id, name, color) { Object.assign(demoDb.profiles.find((p) => p.id === id), { name, color }); },
-    async deleteProfile(id) { demoDb.profiles = demoDb.profiles.filter((p) => p.id !== id); demoDb.purchases = demoDb.purchases.filter((p) => p.profile_id !== id); demoDb.taxes = demoDb.taxes.filter((p) => p.profile_id !== id); },
+    async deleteProfile(id) { demoDb.profiles = demoDb.profiles.filter((p) => p.id !== id); demoDb.purchases = demoDb.purchases.filter((p) => p.profile_id !== id); demoDb.taxes = demoDb.taxes.filter((p) => p.profile_id !== id); demoDb.subscriptions = demoDb.subscriptions.filter((p) => p.profile_id !== id); },
     async addReceipt({ profile_id, date, store, items, tax }) {
       for (const i of items) demoDb.purchases.push({ id: did(), profile_id, date, store, item: i.item, price: i.price, category: i.category });
       if (tax > 0) demoDb.taxes.push({ id: did(), profile_id, date, store, tax });
@@ -313,12 +375,24 @@
     async deletePurchase(id) { demoDb.purchases = demoDb.purchases.filter((p) => p.id !== id); },
     async deleteTax(id) { demoDb.taxes = demoDb.taxes.filter((p) => p.id !== id); },
     async setCategory(id, category) { demoDb.purchases.find((p) => p.id === id).category = category; },
+    async addSub(row) { demoDb.subscriptions.push({ id: did(), created_at: new Date().toISOString(), charged_through: null, ...row }); },
+    async updateSub(id, patch) { Object.assign(demoDb.subscriptions.find((x) => x.id === id), patch); },
+    async deleteSub(id) { demoDb.subscriptions = demoDb.subscriptions.filter((x) => x.id !== id); },
+    async charge(due, through) {
+      for (const { sub, dates } of due) {
+        for (const date of dates) { const r = chargeRow(sub, date); if (!demoDb.purchases.some((x) => x.id === r.id)) demoDb.purchases.push(r); }
+        demoDb.subscriptions.find((x) => x.id === sub.id).charged_through = through;
+      }
+    },
   };
   const db = () => (mode === 'demo' ? demo : remote);
 
   async function refresh() {
     try {
-      const d = await db().load();
+      let d = await db().load();
+      subscriptions = d.subscriptions || [];
+      const due = dueCharges(d.profiles || []);
+      if (due.length) { try { await db().charge(due, iso(new Date())); d = await db().load(); subscriptions = d.subscriptions || []; } catch (e) { console.error('subscription charges', e); } }
       profiles = d.profiles; purchases = d.purchases; taxes = d.taxes;
       if (mode === 'remote') { imported = !!d.imported; recoveryAt = d.recoveryAt || null; }
       loaded = true; loadError = false;
@@ -568,7 +642,82 @@
     const ps = purchases.filter((p) => inMonth(p.date)), ts = taxes.filter((t) => inMonth(t.date));
     if (!purchases.length) return [h('div', { class: 'card empty', text: 'Insights show up here once you add a receipt.' })];
     const all = sum(ps, 'price');
+    const totalOf = (key) => r2(sum(purchases.filter((p) => p.date.slice(0, 7) === key), 'price') + sum(taxes.filter((t) => t.date.slice(0, 7) === key), 'tax'));
+    const prevKey = month === 'all' ? null : iso(new Date(+month.slice(0, 4), +month.slice(5, 7) - 2, 1)).slice(0, 7);
+    const prevPs = prevKey ? purchases.filter((p) => p.date.slice(0, 7) === prevKey) : [];
+    const prevName = prevKey ? MONTHS[+prevKey.slice(5, 7) - 1] : '';
     const legend = () => h('div', { class: 'legend' }, profiles.map((p) => h('span', null, dot(colorVar(p.color)), p.name)));
+
+    // ---- overview ----
+    const now = new Date(), thisKey = iso(now).slice(0, 7);
+    const spent = r2(all + sum(ts, 'tax'));
+    const prevTotal = prevKey ? totalOf(prevKey) : 0;
+    let spanDays;
+    if (month === 'all') { const ds = ps.map((p) => p.date).sort(); spanDays = ds.length ? Math.round((parseIso(ds[ds.length - 1]) - parseIso(ds[0])) / 864e5) + 1 : 1; }
+    else spanDays = month === thisKey ? now.getDate() : new Date(+month.slice(0, 4), +month.slice(5, 7), 0).getDate();
+    const perDay = spent / Math.max(1, spanDays);
+    const inMonthDays = month === 'all' ? 0 : new Date(+month.slice(0, 4), +month.slice(5, 7), 0).getDate();
+    const receiptsN = new Set(ps.map((p) => p.receipt || `${p.date}|${p.store}|${p.profile_id}`)).size;
+    const delta = (cur, prev, label) => {
+      if (!(prev > 0)) return null;
+      const d = (cur - prev) / prev, up = d > 0.005, down = d < -0.005;
+      return h('span', { class: 'delta ' + (up ? 'up' : down ? 'down' : '') }, up || down ? icon(up ? 'up' : 'down') : null, `${Math.abs(Math.round(d * 100))}% vs ${label}`);
+    };
+    const kpi = (label, value, sub) => h('div', { class: 'kpi' }, h('span', { class: 'k-label', text: label }), h('span', { class: 'k-val', text: value }), sub ? h('span', { class: 'k-sub' }, sub) : null);
+    const biggest = ps.filter((p) => !isSubCharge(p)).slice().sort((a, b) => b.price - a.price)[0];
+    const projected = month === thisKey && now.getDate() < inMonthDays ? r2(perDay * inMonthDays) : null;
+    const overview = h('section', { class: 'card' },
+      h('div', { class: 'kpis' },
+        kpi(month === 'all' ? 'Spent, all time' : 'Spent with tax', money(spent), month === thisKey && prevKey ? delta(spent, totalOf(prevKey) * (now.getDate() / Math.max(1, new Date(+prevKey.slice(0, 4), +prevKey.slice(5, 7), 0).getDate())), `${prevName} so far`) : delta(spent, prevTotal, prevName)),
+        kpi('Per day', money(perDay), month === 'all' ? `over ${plural(spanDays, 'day')}` : `over ${plural(spanDays, 'day')}`),
+        projected != null ? kpi('On pace for', money(projected), `by ${MON[now.getMonth()]} ${inMonthDays}`) : kpi(prevKey ? `${prevName} total` : 'Months tracked', prevKey ? money(prevTotal) : String(new Set(purchases.map((p) => p.date.slice(0, 7))).size), null),
+        kpi('Receipts', String(receiptsN), plural(ps.length, 'item'))),
+      biggest ? h('p', { class: 'k-foot' }, 'Biggest purchase: ', h('b', { text: biggest.item }), ` at ${biggest.store || 'a store'}, ${money(biggest.price)} on ${fmtDate(biggest.date)}`) : null);
+
+    // ---- highlights: short plain-language findings ----
+    const notes = [];
+    const catTotals = (arr) => { const m = {}; for (const p of arr) { const c = catInfo(p.category).name; m[c] = (m[c] || 0) + p.price; } return m; };
+    const ct = catTotals(ps), pct0 = catTotals(prevPs);
+    const topCat = Object.entries(ct).sort((a, b) => b[1] - a[1])[0];
+    if (topCat && all > 0) notes.push([catInfo(topCat[0]).icon, catInfo(topCat[0]).c, `${topCat[0]} took the biggest share: ${money(topCat[1])}, ${pct(topCat[1], all)}% of what you spent before tax.`]);
+    if (prevPs.length) {
+      const ch = Object.keys({ ...ct, ...pct0 }).map((c) => ({ c, d: (ct[c] || 0) - (pct0[c] || 0) })).filter((x) => Math.abs(x.d) >= 5).sort((a, b) => Math.abs(b.d) - Math.abs(a.d))[0];
+      if (ch) notes.push([ch.d > 0 ? 'up' : 'down', ch.d > 0 ? 'var(--bad)' : 'var(--good)', `${ch.c} ${ch.d > 0 ? 'went up' : 'came down'} ${money(Math.abs(ch.d))} from ${prevName}${month === thisKey ? ' (the month isn\'t over yet)' : ''}.`]);
+    }
+    const visits = {}; for (const p of ps) if (!isSubCharge(p) && p.store) (visits[p.store] = visits[p.store] || new Set()).add(p.date);
+    const topStore = Object.entries(visits).sort((a, b) => b[1].size - a[1].size)[0];
+    if (topStore && topStore[1].size > 1) notes.push(['cart', 'var(--accent)', `You shopped at ${topStore[0]} ${topStore[1].size} times, spending ${money(sum(ps.filter((p) => p.store === topStore[0]), 'price'))}.`]);
+    const subSpent = sum(ps.filter(isSubCharge), 'price');
+    if (subSpent > 0) notes.push(['repeat', 'var(--c-bills)', `Subscriptions were ${money(subSpent)}, ${pct(subSpent, all)}% of spending.`]);
+    else if (subscriptions.some((x) => x.active)) notes.push(['repeat', 'var(--c-bills)', `Your subscriptions cost about ${money(subscriptions.filter((x) => x.active).reduce((t, x) => t + perMonth(x), 0))} a month.`]);
+    const wk = [0, 0, 0, 0, 0, 0, 0]; for (const p of ps) if (!isSubCharge(p)) wk[parseIso(p.date).getDay()] += p.price;
+    const wd = wk.indexOf(Math.max(...wk));
+    if (ps.length >= 8 && wk[wd] > 0) notes.push(['insights', 'var(--c-shopping)', `${['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'][wd]} are your biggest spending day (${pct(wk[wd], all)}% of the total).`]);
+    const highlights = notes.length ? card('Highlights', null, h('ul', { class: 'hl' }, notes.slice(0, 5).map(([ic, c, t]) => h('li', { c }, h('span', { class: 'hl-ic' }, icon(ic)), h('span', { text: t }))))) : null;
+
+    // ---- trend: the last 12 months with data ----
+    const have = [...new Set(purchases.map((p) => p.date.slice(0, 7)).concat(taxes.map((t) => t.date.slice(0, 7))))].sort();
+    const keys = [];
+    if (have.length) { const last = have[have.length - 1] > thisKey ? have[have.length - 1] : thisKey; let [y, m] = last.split('-').map(Number);
+      for (let i = 0; i < 12; i++) { const k = `${y}-${String(m).padStart(2, '0')}`; if (k < have[0]) break; keys.unshift(k); if (--m === 0) { m = 12; y--; } } }
+    const tvals = keys.map((k) => ({ k, v: totalOf(k) })), tmax = Math.max(1, ...tvals.map((x) => x.v));
+    const done = tvals.filter((x) => x.k !== thisKey), avg = done.length ? done.reduce((t, x) => t + x.v, 0) / done.length : 0;
+    const trend = card('Monthly trend', avg ? `With tax. Average ${money(avg)} a month${keys.includes(thisKey) ? ', not counting this month' : ''}. Tap a month to open it.` : 'With tax. Tap a month to open it.',
+      h('div', { class: 'trend', style: { gridTemplateColumns: `repeat(${tvals.length}, minmax(0, 1fr))` } },
+        avg ? h('i', { class: 'trend-avg', style: { bottom: `calc(26px + ${(avg / tmax) * 130}px)` }, title: 'Average' }) : null,
+        tvals.map((x) => h('button', { class: 'tbar', disabled: !x.v, 'aria-current': String(month === x.k), 'aria-label': `${fmtMonth(x.k)}: ${money(x.v)}`, onclick: () => { month = month === x.k ? 'all' : x.k; render(); window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' }); } },
+          h('span', { class: 'tval', text: cur() + compact(x.v * rate()) }),
+          h('span', { class: 'tcol' + (x.k === thisKey ? ' partial' : '') }, h('i', { style: { height: Math.max(3, (x.v / tmax) * 130) + 'px' } })),
+          h('span', { class: 'tlbl', text: MON[+x.k.slice(5, 7) - 1] })))));
+
+    // ---- what you buy most ----
+    const norm = (t) => String(t).toLowerCase().replace(/[×x]\s*\d+\s*$/i, '').replace(/\(.*?\)/g, '').replace(/\b\d+(\.\d+)?\s*(oz|lb|lbs|ct|pk|g|kg|ml|l)\b/gi, '').replace(/[^a-z0-9& ]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const qty = (t) => { const m = String(t).match(/[×x]\s*(\d+)\s*$/i); return m ? Number(m[1]) : 1; };
+    const im = new Map();
+    for (const p of ps) { if (isSubCharge(p) || p.price <= 0) continue; const k = norm(p.item); if (!k || /^(bag|bag charge|lunch|tax)$/.test(k)) continue; const o = im.get(k) || { name: p.item.replace(/\s*[×x]\s*\d+\s*$/i, '').replace(/\s*\(.*?\)\s*/g, ' ').trim(), n: 0, total: 0, stores: new Set() }; o.n += qty(p.item); o.total += p.price; o.stores.add(p.store); im.set(k, o); }
+    const top = [...im.values()].filter((o) => o.n > 1).sort((a, b) => b.n - a.n || b.total - a.total).slice(0, 8);
+    const buys = top.length ? card('What you buy most', 'Items bought more than once, before tax.', h('div', { class: 'buys' }, top.map((o) => h('div', { class: 'buy' },
+      h('span', { class: 'buy-n', text: '×' + o.n }), h('span', { class: 'buy-name' }, o.name, h('small', { text: `${[...o.stores].slice(0, 2).join(', ')} · about ${money(o.total / o.n)} each` })), h('span', { class: 'buy-amt', text: money(o.total) }))))) : null;
 
     // categories
     const cats = h('div', { class: 'cats' });
@@ -576,7 +725,9 @@
     const cmax = Math.max(1, ...rows.map((r) => r.total));
     for (const r of rows) {
       const open = openCats.has(r.c.name);
-      const sub = h('span', { class: 'cat-sub' }, h('span', { text: plural(r.its.length, 'item') }),
+      const was = pct0[r.c.name] || 0, diff = r.total - was;
+      const chg = prevPs.length && Math.abs(diff) >= 1 ? h('span', { class: 'chg ' + (diff > 0 ? 'up' : 'down') }, icon(diff > 0 ? 'up' : 'down'), money(Math.abs(diff))) : null;
+      const sub = h('span', { class: 'cat-sub' }, chg, h('span', { text: plural(r.its.length, 'item') }),
         profiles.map((p) => { const t = sum(r.its.filter((x) => x.profile_id === p.id), 'price'); return t ? h('span', null, dot(colorVar(p.color)), money(t)) : null; }).filter(Boolean).slice(0, 4));
       cats.append(h('button', { class: 'cat-row', c: r.c.c, 'aria-expanded': String(open), onclick: () => { open ? openCats.delete(r.c.name) : openCats.add(r.c.name); render(); } },
         h('span', { class: 'cat-icon' }, icon(r.c.icon)),
@@ -626,13 +777,136 @@
 
     return [
       h('div', { class: 'section-head' }, h('h2', { class: 'section-title', text: 'Insights' }), h('span', { class: 'note', text: fmtMonth(month) })),
-      card('By category', "Before tax. Tap a category to see what's in it.", cats),
+      overview,
+      highlights,
+      trend,
+      card('By category', `Before tax${prevPs.length ? `, with the change from ${prevName}` : ''}. Tap a category to see what's in it.`, cats),
+      buys,
       storeCard,
       card('By day', 'Before tax, split by profile.', drows.length ? days : h('p', { class: 'empty', text: `Nothing in ${fmtMonth(month)}.` }), legend()),
       card('Tax', 'Sales tax from receipts, kept separate from item totals.', stats),
       card('Month by month', 'With tax. Tap a month to view it.', months),
     ];
   }
+
+  // ---------- SUBSCRIPTIONS ----------
+  const perMonth = (s) => s.amount * CADENCE[s.cadence].mo;
+  function viewSubs() {
+    const head = h('div', { class: 'section-head' }, h('h2', { class: 'section-title', text: 'Subscriptions' }),
+      h('button', { class: 'btn primary small', onclick: () => openSubSheet(null) }, icon('plus'), 'New'));
+    if (!subscriptions.length) return [head, h('section', { class: 'card welcome' },
+      h('span', { class: 'avatar xl round', c: 'var(--accent)' }, icon('repeat')),
+      h('h2', { text: 'Track what renews' }),
+      h('p', { text: 'Add streaming, the gym, your phone plan or anything else that charges you weekly, monthly or yearly. Tilly adds each charge to Receipts on its date, so your totals stay complete.' }),
+      h('button', { class: 'btn primary', text: 'Add a subscription', onclick: () => openSubSheet(null) }))];
+
+    const today = iso(new Date()), in30 = addDays(today, 30);
+    const live = subscriptions.filter((s) => s.active && profileById(s.profile_id));
+    const mo = live.reduce((t, s) => t + perMonth(s), 0);
+    const byP = profiles.map((p) => ({ p, t: live.filter((s) => s.profile_id === p.id).reduce((t, s) => t + perMonth(s), 0) })).filter((x) => x.t > 0);
+    const summary = h('section', { class: 'receipt sub-hero' },
+      h('div', { class: 'receipt-top' }, h('span', { text: 'Recurring' }), h('span', { text: `${live.length} active` })),
+      h('p', { class: 'receipt-label', text: 'About a month' }),
+      h('p', { class: 'receipt-num', text: money(mo) }),
+      h('p', { class: 'receipt-break', text: `${money(mo * 12)} a year` }),
+      byP.length ? h('hr', { class: 'rule' }) : null,
+      byP.length ? h('div', { class: 'split' }, byP.map((x) => h('i', { c: colorVar(x.p.color), style: { width: (x.t / mo) * 100 + '%' } }))) : null,
+      byP.length ? h('div', { class: 'split-key' }, byP.map((x) => h('span', null, dot(colorVar(x.p.color)), x.p.name, h('b', { text: money(x.t) })))) : null);
+
+    const upcoming = [];
+    for (const s of live) { const after = addDays(today, -1) > lastChecked(s) ? addDays(today, -1) : lastChecked(s); for (const d of occurrencesBetween(s, after, in30, 10)) upcoming.push({ s, d }); }
+    upcoming.sort((a, b) => a.d.localeCompare(b.d) || b.s.amount - a.s.amount);
+    const soon = card('Next 30 days', upcoming.length ? `${plural(upcoming.length, 'charge')} · ${money(upcoming.reduce((t, x) => t + x.s.amount, 0))}` : null,
+      upcoming.length ? h('div', { class: 'upcoming' }, upcoming.slice(0, 12).map(({ s, d }) => {
+        const days = Math.round((parseIso(d) - parseIso(today)) / 864e5);
+        return h('div', { class: 'up-row' },
+          h('span', { class: 'up-date' }, h('b', { text: String(parseIso(d).getDate()) }), h('small', { text: MON[parseIso(d).getMonth()] })),
+          h('span', { class: 'up-name' }, s.name, h('small', { text: days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : `In ${days} days` })),
+          h('span', { class: 'up-amt', text: money(s.amount) }));
+      })) : h('p', { class: 'empty', text: 'Nothing renews in the next 30 days.' }));
+
+    const rows = subscriptions.slice().sort((a, b) => (b.active - a.active) || perMonth(b) - perMonth(a));
+    const list = card('All subscriptions', 'Each charge is added to Receipts automatically. Tap one to edit or pause it.',
+      h('div', { class: 'sub-list' }, rows.map((s) => {
+        const p = profileById(s.profile_id), nx = nextCharge(s);
+        return h('button', { class: 'sub-row' + (s.active ? '' : ' paused'), onclick: () => openSubSheet(s) },
+          h('span', { class: 'avatar round solid', c: pColor(s.profile_id), text: initial(s.name) }),
+          h('span', { class: 'sub-main' }, h('b', { text: s.name }), h('small', { text: [p ? p.name : '', CADENCE[s.cadence].word, s.active ? (nx ? 'Next ' + fmtDate(nx) : '') : 'Paused'].filter(Boolean).join(' · ') })),
+          h('span', { class: 'sub-amt' }, money(s.amount), h('small', { text: '/' + CADENCE[s.cadence].per })));
+      })));
+    return [head, summary, soon, list];
+  }
+
+  let subEditing = null, subCadence = 'monthly', subFor = null, subActive = true;
+  const subCat = catSelect('Bills'); subCat.id = 'sub-cat'; subCat.classList.add('input'); $('sub-cat-slot').replaceWith(subCat);
+  function drawSubForm() {
+    $('sub-cadence').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === subCadence)));
+    $('sub-active').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.v === 'on') === subActive)));
+    $('sub-who').replaceChildren(...profiles.map((p) => h('button', { type: 'button', class: 'chip', c: colorVar(p.color), 'aria-pressed': String(subFor === p.id), onclick: () => { subFor = p.id; drawSubForm(); } }, dot(colorVar(p.color)), p.name)));
+    $('sub-amount-label').textContent = `Amount (${CUR[cur()].code})`;
+    const start = $('sub-start').value, today = iso(new Date());
+    let note = '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(start) && !subEditing && start <= today) {
+      const n = occurrencesBetween({ start_date: start, cadence: subCadence }, addDays(start, -1), today).length;
+      note = `${plural(n, 'charge')} from ${fmtDate(start)} up to today will be added to Receipts. Pick a later date to skip past charges.`;
+    } else if (subEditing && !subEditing.active && subActive) note = 'Charges from while it was paused are skipped.';
+    else if (subEditing) note = 'Changes apply to future charges. Past charges stay in Receipts.';
+    $('sub-note').textContent = note;
+  }
+  function openSubSheet(s) {
+    if (!profiles.length) { toast('Create a profile first'); openProfileSheet(null); return; }
+    subEditing = s;
+    $('sub-title').textContent = s ? 'Edit subscription' : 'New subscription';
+    $('sub-save').textContent = s ? 'Save changes' : 'Add subscription';
+    $('sub-name').value = s ? s.name : '';
+    $('sub-amount').value = s ? (s.amount * rate()).toFixed(CUR[cur()].dp) : '';
+    $('sub-start').value = s ? s.start_date : iso(new Date());
+    $('sub-start-label').textContent = s ? 'Started' : 'First charge';
+    subCadence = s ? s.cadence : 'monthly'; subActive = s ? s.active : true;
+    subFor = s ? s.profile_id : (subFor && profileById(subFor) ? subFor : profiles[0].id);
+    subCat.value = s ? catInfo(s.category).name : 'Bills';
+    $('sub-active-row').hidden = !s;
+    $('sub-err').textContent = '';
+    const del = $('sub-delete'); del.hidden = !s; del.dataset.armed = ''; del.textContent = 'Delete subscription';
+    $('sub-suggest').replaceChildren(...(s ? [] : [['Netflix', 'Bills'], ['Spotify', 'Bills'], ['Gym', 'Personal'], ['Phone plan', 'Bills'], ['Car insurance', 'Transportation'], ['iCloud', 'Bills']]
+      .filter(([n]) => !subscriptions.some((x) => x.name.toLowerCase() === n.toLowerCase()))
+      .map(([n, c]) => h('button', { type: 'button', text: n, onclick: () => { $('sub-name').value = n; subCat.value = c; if (n === 'Car insurance') subCadence = 'yearly'; drawSubForm(); $('sub-amount').focus(); } }))));
+    drawSubForm();
+    openSheet('sheet-sub');
+    if (!s) $('sub-name').focus();
+  }
+  $('sub-cadence').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { subCadence = b.dataset.v; drawSubForm(); } });
+  $('sub-active').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { subActive = b.dataset.v === 'on'; drawSubForm(); } });
+  $('sub-start').addEventListener('input', drawSubForm);
+  $('sub-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = $('sub-name').value.trim(), amt = Number($('sub-amount').value), start = $('sub-start').value;
+    const err = (m) => { $('sub-err').textContent = m; };
+    if (!name) return err('Give it a name.');
+    if (!($('sub-amount').value !== '' && amt >= 0)) return err('Enter how much it costs.');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) return err('Pick the date of a charge.');
+    if (!subFor) return err('Pick whose it is.');
+    const row = { name, amount: toUsd(amt), cadence: subCadence, start_date: start, profile_id: subFor, category: subCat.value };
+    $('sub-save').disabled = true;
+    try {
+      if (subEditing) {
+        const patch = { ...row, active: subActive };
+        if (subActive && !subEditing.active) patch.charged_through = addDays(iso(new Date()), -1);   // skip the paused stretch
+        if (start !== subEditing.start_date && start > iso(new Date())) patch.charged_through = null;
+        await db().updateSub(subEditing.id, patch);
+      } else await db().addSub({ ...row, active: true });
+      closeSheets(); toast(subEditing ? 'Subscription saved' : `${name} added`); await refresh();
+    } catch { err("Couldn't save it. Try again."); }
+    $('sub-save').disabled = false;
+  });
+  $('sub-delete').addEventListener('click', async () => {
+    const del = $('sub-delete'); if (!subEditing) return;
+    if (!del.dataset.armed) { del.dataset.armed = '1'; del.textContent = `Tap again to delete ${subEditing.name}. Past charges stay in Receipts.`; return; }
+    del.disabled = true;
+    try { await db().deleteSub(subEditing.id); closeSheets(); toast('Subscription deleted'); await refresh(); }
+    catch { $('sub-err').textContent = "Couldn't delete it. Try again."; }
+    del.disabled = false;
+  });
 
   // ---------- SETTINGS ----------
   async function callAccount(action, extra, withAuth) {
@@ -775,13 +1049,15 @@
     const keepFocus = document.activeElement && document.activeElement.id === 'receipt-search';
     if (loadError && !loaded) { view.replaceChildren(h('div', { class: 'card empty' }, h('p', { text: "Couldn't load your receipts. Check your connection." }), h('button', { class: 'btn primary', style: { marginTop: '12px' }, text: 'Try again', onclick: refresh }))); return; }
     if (!loaded) { view.replaceChildren(h('div', { class: 'card empty' }, h('span', { class: 'spin' }), 'Loading your receipts…')); return; }
-    const kids = tab === 'receipts' ? viewReceipts() : tab === 'insights' ? viewInsights() : tab === 'settings' ? viewSettings() : viewHome();
+    $('open-settings').setAttribute('aria-current', tab === 'settings' ? 'page' : 'false');
+    $('month').closest('.pill-select').hidden = tab === 'subs' || tab === 'settings';
+    const kids = tab === 'receipts' ? viewReceipts() : tab === 'insights' ? viewInsights() : tab === 'settings' ? viewSettings() : tab === 'subs' ? viewSubs() : viewHome();
     view.replaceChildren(...kids.filter(Boolean));
     if (keepFocus && $('receipt-search')) { const i = $('receipt-search'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
   }
   function setTab(name) {
     if (name === 'profiles') name = 'settings';
-    if (!['home', 'receipts', 'insights', 'settings'].includes(name)) name = 'home';
+    if (!['home', 'receipts', 'subs', 'insights', 'settings'].includes(name)) name = 'home';
     const changed = tab !== name;
     tab = name; editing = false;
     if (name !== 'receipts') query = '';
@@ -791,6 +1067,7 @@
   }
   document.querySelectorAll('.tabs [data-tab]').forEach((b) => b.addEventListener('click', () => { if (b.dataset.tab === 'receipts' && tab !== 'receipts') filterProfile = 'all'; setTab(b.dataset.tab); }));
   $('month').addEventListener('change', (e) => { month = e.target.value; render(); });
+  $('open-settings').addEventListener('click', () => setTab('settings'));
   window.addEventListener('hashchange', () => { if ($('app').hidden) return; const t = location.hash.slice(1); if (t && t !== tab) setTab(t); });
 
   // ---------- sheets ----------

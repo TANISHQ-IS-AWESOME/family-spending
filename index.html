@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap">
 <script>try{var t=localStorage.getItem('tilly-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
-<link rel="stylesheet" href="app.css?v=202611151434">
+<link rel="stylesheet" href="app.css?v=202611151441">
 </head>
 <body>
 
@@ -71,7 +71,10 @@
 <div class="app" id="app" hidden>
   <header class="top">
     <div class="brand"><span class="mark" aria-hidden="true"></span><span class="word">Tilly</span></div>
-    <label class="pill-select" for="month"><select id="month" aria-label="Month"></select></label>
+    <div class="top-right">
+      <label class="pill-select" for="month"><select id="month" aria-label="Month"></select></label>
+      <button class="icon-btn" id="open-settings" type="button" aria-label="Settings"><span data-ic="gear"></span></button>
+    </div>
   </header>
   <div class="offline-banner" id="offline-banner" hidden role="status"></div>
   <div class="demo-banner" id="demo-banner" hidden>
@@ -84,8 +87,8 @@
     <button data-tab="home"><span data-ic="home"></span><span>Home</span></button>
     <button data-tab="receipts"><span data-ic="receipt"></span><span>Receipts</span></button>
     <button class="fab" id="open-add" aria-label="Add a receipt"><span data-ic="plus"></span></button>
+    <button data-tab="subs" aria-label="Subscriptions"><span data-ic="repeat"></span><span>Subs</span></button>
     <button data-tab="insights"><span data-ic="insights"></span><span>Insights</span></button>
-    <button data-tab="settings"><span data-ic="gear"></span><span>Settings</span></button>
   </nav>
 </div>
 
@@ -188,6 +191,40 @@
   </form>
 </div>
 
+<!-- ============ SUBSCRIPTION ============ -->
+<div class="sheet-bg" id="sheet-sub" hidden>
+  <form class="sheet" role="dialog" aria-modal="true" aria-labelledby="sub-title" id="sub-form" novalidate>
+    <div class="sheet-head"><h2 id="sub-title">New subscription</h2><button class="x" type="button" data-close aria-label="Close">×</button></div>
+    <label class="field" for="sub-name">Name
+      <input class="input" id="sub-name" type="text" maxlength="80" placeholder="Netflix, gym, phone plan…" autocomplete="off" required>
+    </label>
+    <div class="suggest" id="sub-suggest"></div>
+    <div class="fields">
+      <label class="field" for="sub-amount"><span id="sub-amount-label">Amount</span><input class="input mono" id="sub-amount" type="number" step="0.01" min="0" inputmode="decimal" placeholder="0.00" required></label>
+      <label class="field" for="sub-start"><span id="sub-start-label">First charge</span><input class="input" id="sub-start" type="date" required></label>
+    </div>
+    <div>
+      <p class="step-label">How often</p>
+      <div class="seg wide three" id="sub-cadence" role="group" aria-label="How often">
+        <button type="button" data-v="weekly">Weekly</button><button type="button" data-v="monthly">Monthly</button><button type="button" data-v="yearly">Yearly</button>
+      </div>
+    </div>
+    <div>
+      <p class="step-label">Whose is it?</p>
+      <div class="chips" id="sub-who" role="group" aria-label="Profile"></div>
+    </div>
+    <label class="field" for="sub-cat">Category<span id="sub-cat-slot"></span></label>
+    <div id="sub-active-row" hidden>
+      <p class="step-label">Status</p>
+      <div class="seg wide" id="sub-active" role="group" aria-label="Status"><button type="button" data-v="on">Active</button><button type="button" data-v="off">Paused</button></div>
+    </div>
+    <p class="note" id="sub-note"></p>
+    <p class="status err" id="sub-err" aria-live="polite"></p>
+    <button class="btn primary" type="submit" id="sub-save">Add subscription</button>
+    <button class="btn danger" type="button" id="sub-delete" hidden>Delete subscription</button>
+  </form>
+</div>
+
 <!-- ============ MONTH QR ============ -->
 <div class="sheet-bg" id="sheet-qr" hidden>
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="qr-title">
@@ -204,10 +241,10 @@
 
 <div class="toast" id="toast" hidden role="status"></div>
 
-<script src="vendor/capacitor.js?v=202611151434"></script>
-<script src="vendor/qrcode.js?v=202611151434"></script>
-<script src="vendor/supabase.js?v=202611151434"></script>
-<script src="scan.js?v=202611151434"></script>
-<script src="app.js?v=202611151434"></script>
+<script src="vendor/capacitor.js?v=202611151441"></script>
+<script src="vendor/qrcode.js?v=202611151441"></script>
+<script src="vendor/supabase.js?v=202611151441"></script>
+<script src="scan.js?v=202611151441"></script>
+<script src="app.js?v=202611151441"></script>
 </body>
 </html>
