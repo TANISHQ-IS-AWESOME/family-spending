@@ -1,8 +1,8 @@
-# Family Spending
+# Tilly
 
-Mom's and Dad's grocery and household spending: totals by month, store and day, tax kept separate, and receipts added from a photo.
+Keep every receipt and see who spent what. Scan a receipt, pick a profile, and Tilly keeps totals by month, category, store and day, with tax kept separate.
 
-- The page is a static site (GitHub Pages).
-- Data and receipt reading live in Supabase (project `family-spending`), behind the `api` edge function.
-- The app asks for the family passcode (the `FAMILY_PASSCODE` secret in Supabase).
-- Photo reading uses the `ANTHROPIC_API_KEY` secret in Supabase.
+- Static site on GitHub Pages: `index.html`, `app.css`, `app.js`, `scan.js` (free on-device receipt scanner).
+- Accounts and data live in Supabase. Tables `sp_profiles`, `sp_purchases`, `sp_taxes` are protected by row-level security, so each account only reads and writes its own rows.
+- The `account` edge function creates accounts and copies data over from the original Family Spending app (needs the family passcode).
+- Add `#demo` to the address to open the sample-data demo.
