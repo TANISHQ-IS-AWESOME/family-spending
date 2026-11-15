@@ -1068,6 +1068,9 @@
   document.querySelectorAll('.tabs [data-tab]').forEach((b) => b.addEventListener('click', () => { if (b.dataset.tab === 'receipts' && tab !== 'receipts') filterProfile = 'all'; setTab(b.dataset.tab); }));
   $('month').addEventListener('change', (e) => { month = e.target.value; render(); });
   $('open-settings').addEventListener('click', () => setTab('settings'));
+  const topBar = document.querySelector('.top');
+  const markScrolled = () => topBar.classList.toggle('scrolled', window.scrollY > 4);
+  window.addEventListener('scroll', markScrolled, { passive: true }); markScrolled();
   window.addEventListener('hashchange', () => { if ($('app').hidden) return; const t = location.hash.slice(1); if (t && t !== tab) setTab(t); });
 
   // ---------- sheets ----------

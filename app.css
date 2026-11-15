@@ -450,3 +450,11 @@ svg.ic { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-wid
 .buy-name small { display: block; font-weight: 500; color: var(--muted); font-size: .8rem; }
 .buy-amt { font-family: var(--f-mono); }
 .tbar:disabled { cursor: default; opacity: .7; }
+
+/* ---------- sticky header bar ---------- */
+.top { position: sticky; top: 0; z-index: 14;
+  margin: calc(-14px - env(safe-area-inset-top, 0px)) calc(-1 * var(--gutter-r)) 0 calc(-1 * var(--gutter-l));
+  padding: calc(10px + env(safe-area-inset-top, 0px)) var(--gutter-r) 10px var(--gutter-l);
+  background: color-mix(in srgb, var(--bg) 82%, transparent); -webkit-backdrop-filter: blur(16px) saturate(1.4); backdrop-filter: blur(16px) saturate(1.4);
+  border-bottom: 1px solid transparent; transition: border-color .2s, box-shadow .2s; }
+.top.scrolled { border-bottom-color: var(--line); box-shadow: 0 6px 18px rgba(0, 0, 0, .06); }
