@@ -61,7 +61,36 @@
   const lsEarly = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
   const CURRENCIES = ['$', '€', '£', '₹', '¥'];
   const prefs = { theme: lsEarly('tilly-theme') || 'system', currency: CURRENCIES.includes(lsEarly('tilly-currency')) ? lsEarly('tilly-currency') : '$', start: lsEarly('tilly-start') === 'all' ? 'all' : 'latest', reminder: lsEarly('tilly-reminder') === 'on' };
-  const money = (v) => (v < 0 ? '−' : '') + prefs.currency + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // ---------- currency ----------
+  // Every amount is stored in US dollars. Picking another currency converts what's shown at the
+  // latest exchange rate, and amounts typed into the add sheet are converted back to dollars.
+  const CUR = { '$': { code: 'USD', dp: 2 }, '€': { code: 'EUR', dp: 2 }, '£': { code: 'GBP', dp: 2 }, '₹': { code: 'INR', dp: 2 }, '¥': { code: 'JPY', dp: 0 } };
+  let fx = (() => { try { const v = JSON.parse(lsEarly('tilly-fx') || 'null'); return v && v.rates ? v : null; } catch { return null; } })();
+  const fxRate = (sym) => (sym === '$' ? 1 : (fx && fx.rates[CUR[sym].code]) || null);
+  const cur = () => (fxRate(prefs.currency) ? prefs.currency : '$');           // falls back to $ until rates arrive
+  const rate = () => fxRate(cur());
+  const fmtCur = (v, neg = '−') => { const c = CUR[cur()]; return (v < -0.0049 ? neg : '') + cur() + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: c.dp, maximumFractionDigits: c.dp }); };
+  const money = (v, neg) => fmtCur(v * rate(), neg);                         // a stored dollar amount, shown in the chosen currency
+  const toUsd = (v) => r2(v / rate());                                       // an amount typed in the chosen currency, saved as dollars
+  async function loadRates(force) {
+    if (!force && fx && Date.now() - fx.fetched < 12 * 3600e3) return true;
+    const codes = Object.values(CUR).map((c) => c.code).filter((c) => c !== 'USD');
+    const sources = [
+      ['https://api.frankfurter.dev/v1/latest?base=USD&symbols=' + codes.join(','), (j) => ({ rates: j.rates, date: j.date })],
+      ['https://open.er-api.com/v6/latest/USD', (j) => ({ rates: j.rates, date: new Date(j.time_last_update_unix * 1000).toISOString().slice(0, 10) })],
+    ];
+    for (const [url, read] of sources) {
+      try {
+        const res = await fetch(url, { cache: 'no-store' }); if (!res.ok) continue;
+        const got = read(await res.json());
+        if (!got.rates || codes.some((c) => !(Number(got.rates[c]) > 0))) continue;
+        fx = { rates: Object.fromEntries(codes.map((c) => [c, Number(got.rates[c])])), date: got.date, fetched: Date.now() };
+        ls.set('tilly-fx', JSON.stringify(fx));
+        return true;
+      } catch {}
+    }
+    return !!fx;
+  }
   const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -429,7 +458,7 @@
 
   // The barcode on the Home receipt opens a QR code holding a plain-text summary of the month.
   function monthSummary(key, ps, ts) {
-    const m = (v) => (v < 0 ? '-' : '') + prefs.currency + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const m = (v) => money(v, '-');
     const items = sum(ps, 'price'), tax = sum(ts, 'tax');
     const rows = profiles.map((p) => ({ n: p.name, t: sum(ps.filter((x) => x.profile_id === p.id), 'price') })).filter((x) => x.t !== 0).sort((a, b) => b.t - a.t);
     return [`Tilly - ${fmtMonth(key)}`, ...rows.map((r) => `${r.n}: ${m(r.t)}`), `Tax: ${m(tax)}`, `Total: ${m(r2(items + tax))}`, `${plural(ps.length, 'item')}`].join('\n');
@@ -591,7 +620,7 @@
 
     const drows = group((p) => p.date).sort((a, b) => a.k.localeCompare(b.k)), dmax = Math.max(1, ...drows.map((r) => r.total));
     const days = h('div', { class: 'days' }, drows.map((r) => h('div', { class: 'day', title: `${fmtDate(r.k)}: ${money(r.total)}` },
-      h('span', { class: 'day-amt', text: prefs.currency + Math.round(r.total).toLocaleString('en-US') }),
+      h('span', { class: 'day-amt', text: cur() + Math.round(r.total * rate()).toLocaleString('en-US') }),
       h('div', { class: 'day-col' }, profiles.filter((p) => r.by[p.id] > 0).map((p) => h('i', { c: colorVar(p.color), style: { height: Math.max(2, (r.by[p.id] / dmax) * 110) + 'px' } }))),
       h('span', { class: 'day-lbl', text: fmtDate(r.k) }))));
 
@@ -636,9 +665,11 @@
     const safe = (v) => { const t = String(v == null ? '' : v); return /^[=+\-@]/.test(t) ? "'" + t : t; };
     const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
     const name = (id) => (profileById(id) || {}).name || '';
-    const rows = [['Date', 'Profile', 'Store', 'Item', 'Category', 'Amount']];
-    for (const p of purchases.slice().sort((x, y) => x.date.localeCompare(y.date))) rows.push([p.date, safe(name(p.profile_id)), safe(p.store), safe(p.item), catInfo(p.category).name, p.price.toFixed(2)]);
-    for (const t of taxes.slice().sort((x, y) => x.date.localeCompare(y.date))) rows.push([t.date, safe(name(t.profile_id)), safe(t.store), 'Sales tax', 'Tax', t.tax.toFixed(2)]);
+    const conv = cur() !== '$', dp = CUR[cur()].dp, code = CUR[cur()].code;
+    const amt = (v) => conv ? [v.toFixed(2), (v * rate()).toFixed(dp)] : [v.toFixed(2)];
+    const rows = [['Date', 'Profile', 'Store', 'Item', 'Category', 'Amount (USD)', ...(conv ? [`Amount (${code})`] : [])]];
+    for (const p of purchases.slice().sort((x, y) => x.date.localeCompare(y.date))) rows.push([p.date, safe(name(p.profile_id)), safe(p.store), safe(p.item), catInfo(p.category).name, ...amt(p.price)]);
+    for (const t of taxes.slice().sort((x, y) => x.date.localeCompare(y.date))) rows.push([t.date, safe(name(t.profile_id)), safe(t.store), 'Sales tax', 'Tax', ...amt(t.tax)]);
     const url = URL.createObjectURL(new Blob([rows.map((r) => r.map(q).join(',')).join('\r\n')], { type: 'text/csv' }));
     const a = h('a', { href: url, download: `tilly-export-${iso(new Date())}.csv` });
     document.body.append(a); a.click(); a.remove();
@@ -672,7 +703,14 @@
       card('Appearance', null,
         setRow('Theme', 'System follows your phone or computer.', segPick('Theme', [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']], prefs.theme, (k) => { setPref('theme', k); applyTheme(); render(); }))),
       card('Preferences', 'Saved on this device.',
-        setRow('Currency symbol', null, (() => { const sel = h('select', { class: 'set-select', 'aria-label': 'Currency symbol' }, CURRENCIES.map((c) => new Option(c, c))); sel.value = prefs.currency; sel.addEventListener('change', () => { setPref('currency', sel.value); heroShown = null; render(); }); return sel; })()),
+        setRow('Currency', cur() === '$' ? 'Amounts are saved in US dollars. Pick another currency to convert everything at the latest exchange rate.' : `Converted from US dollars at 1 USD = ${rate().toLocaleString('en-US', { maximumFractionDigits: 4 })} ${CUR[cur()].code}${fx && fx.date ? ` (rate from ${fmtDate(fx.date)})` : ''}. New receipts are entered in ${CUR[cur()].code}.`, (() => {
+          const sel = h('select', { class: 'set-select', 'aria-label': 'Currency' }, CURRENCIES.map((c) => new Option(`${c} ${CUR[c].code}`, c))); sel.value = cur();
+          sel.addEventListener('change', async () => {
+            const want = sel.value;
+            if (want !== '$' && !(await loadRates(!fx))) { sel.value = cur(); toast("Couldn't get exchange rates. Connect to the internet and try again."); return; }
+            setPref('currency', want); heroShown = null; render();
+          });
+          return sel; })()),
         setRow('Open on', 'Which month shows first when you open Tilly.', segPick('Open on', [['latest', 'Latest month'], ['all', 'All time']], prefs.start, (k) => { setPref('start', k); month = k === 'all' ? 'all' : monthList()[0] || 'all'; render(); }))),
       card('Notifications', null,
         NATIVE
@@ -875,7 +913,7 @@
   $('pick').addEventListener('change', onPhoto);
   function addLine(item = '', price = '') {
     const name = h('input', { class: 'input', type: 'text', value: item, placeholder: 'Item', 'aria-label': 'Item', maxLength: 200 });
-    const p = h('input', { class: 'input price', type: 'number', step: '0.01', inputMode: 'decimal', value: price === '' ? '' : Number(price).toFixed(2), placeholder: '0.00', 'aria-label': 'Price' });
+    const p = h('input', { class: 'input price', type: 'number', step: '0.01', inputMode: 'decimal', value: price === '' ? '' : Number(price).toFixed(CUR[cur()].dp === 0 ? 0 : 2), placeholder: '0.00', 'aria-label': 'Price' });
     const x = h('button', { type: 'button', class: 'rm', text: '✕', 'aria-label': 'Remove line' });
     const cs = catSelect(guessCategory(item, $('r-store').value)); cs.dataset.auto = '1';
     cs.addEventListener('change', () => { cs.dataset.auto = ''; });
@@ -893,8 +931,9 @@
     const lines = readLines().filter((l) => l.item || !isNaN(l.price));
     const items = r2(lines.reduce((s, l) => s + (isNaN(l.price) ? 0 : l.price), 0)), tax = Number($('r-tax').value) || 0;
     const row = (a, b, strong) => h('div', null, h(strong ? 'strong' : 'span', { text: a }), h(strong ? 'strong' : 'span', { class: 'mono', text: b }));
-    $('sum').replaceChildren(row(`Items (${lines.length})`, money(items)), row('Tax', money(tax)), row('Total', money(r2(items + tax)), true));
-    if (receiptTotal != null && Math.abs(r2(items + tax) - receiptTotal) > 0.02) $('sum').append(h('p', { class: 'warn', text: `The receipt says ${money(receiptTotal)}. Check the lines before adding.` }));
+    $('sum').replaceChildren(row(`Items (${lines.length})`, fmtCur(items)), row('Tax', fmtCur(tax)), row('Total', fmtCur(r2(items + tax)), true));
+    if (cur() !== '$') $('sum').append(h('p', { class: 'note', text: `Enter amounts in ${CUR[cur()].code}. Saved as US$${toUsd(r2(items + tax)).toFixed(2)} at today's rate.` }));
+    if (receiptTotal != null && Math.abs(r2(items + tax) - receiptTotal) > 0.02) $('sum').append(h('p', { class: 'warn', text: `The receipt says ${fmtCur(receiptTotal)}. Check the lines before adding.` }));
     const bad = lines.some((l) => !l.item || isNaN(l.price));
     $('save').disabled = !addFor || !lines.length || bad || !/^\d{4}-\d{2}-\d{2}$/.test($('r-date').value);
     const p = profileById(addFor);
@@ -936,7 +975,7 @@
     btn.disabled = true; st.className = 'status'; st.textContent = 'Adding…';
     const date = $('r-date').value, who = profileById(addFor);
     try {
-      await db().addReceipt({ profile_id: addFor, date, store: $('r-store').value.trim(), items: lines.map((l) => ({ item: l.item, price: r2(l.price), category: l.category })), tax: r2(Number($('r-tax').value) || 0) });
+      await db().addReceipt({ profile_id: addFor, date, store: $('r-store').value.trim(), items: lines.map((l) => ({ item: l.item, price: toUsd(l.price), category: l.category })), tax: toUsd(Number($('r-tax').value) || 0) });
       closeSheets(); toast(offline ? `Saved on this device. It will sync when you're back online.` : `Added ${plural(lines.length, 'item')} to ${who ? who.name : 'profile'}`);
       if (month !== 'all') month = date.slice(0, 7);
       await refresh();
@@ -1094,6 +1133,8 @@
 
   // ---------- start ----------
   drawAuthMode();
+  // keep exchange rates fresh when a non-dollar currency is picked
+  if (prefs.currency !== '$') loadRates(false).then((ok) => { if (ok && !$('app').hidden) { heroShown = null; render(); } });
   (async () => {
     const fromResetLink = /type=recovery/.test(location.hash + location.search);
     let recovering = false;
