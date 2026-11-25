@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Tilly is always dark: charcoal behind everything, gold for the brand -->
+    <color name="tilly_bg">#121216</color>
+    <color name="tilly_gold">#E8B04B</color>
+</resources>

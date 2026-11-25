@@ -2,10 +2,15 @@
   "appId": "io.github.tanishqisawesome.tilly",
   "appName": "Tilly",
   "webDir": "www",
-  "backgroundColor": "#EDEFF5",
+  "backgroundColor": "#121216",
   "ios": {
     "contentInset": "never",
-    "includePlugins": ["@capacitor/app", "@capacitor/camera", "@capacitor/local-notifications", "@capacitor/network"]
+    "includePlugins": [
+      "@capacitor/app",
+      "@capacitor/camera",
+      "@capacitor/local-notifications",
+      "@capacitor/network"
+    ]
   },
   "android": {
     "allowMixedContent": false
@@ -13,7 +18,10 @@
   "plugins": {
     "LocalNotifications": {
       "smallIcon": "ic_stat_tilly",
-      "iconColor": "#2B3FD6"
+      "iconColor": "#E8B04B"
+    },
+    "SystemBars": {
+      "style": "DARK"
     }
   }
 }

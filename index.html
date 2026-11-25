@@ -5,10 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Tilly</title>
 <meta name="description" content="Tilly keeps every receipt, shows who spent what, and finds ways to save. Snap a receipt, pick a profile, see the totals.">
-<meta name="theme-color" content="#2B3FD6">
+<meta name="theme-color" content="#121216">
+<meta name="color-scheme" content="dark">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Tilly">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png" type="image/png">
@@ -16,8 +17,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap">
-<script>try{var t=localStorage.getItem('tilly-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);var a=localStorage.getItem('tilly-accent');if(a&&a!=='blue')document.documentElement.setAttribute('data-accent',a);}catch(e){}</script>
-<link rel="stylesheet" href="app.css?v=202611251756">
+<script>try{var a=localStorage.getItem('tilly-accent');if(a&&a!=='gold'&&a!=='blue')document.documentElement.setAttribute('data-accent',a);}catch(e){}</script>
+<link rel="stylesheet" href="app.css?v=202611252313">
 </head>
 <body>
 
@@ -417,14 +418,14 @@
 <!-- ============ WHAT'S NEW ============ -->
 <div class="sheet-bg" id="sheet-new" hidden>
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="new-title">
-    <div class="sheet-head"><h2 id="new-title">What's new in Tilly 2.1</h2><button class="x" type="button" data-close aria-label="Close">×</button></div>
+    <div class="sheet-head"><h2 id="new-title">What's new in Tilly 2.2</h2><button class="x" type="button" data-close aria-label="Close">×</button></div>
     <ul class="whatsnew">
-      <li><span class="hl-ic" style="--c:var(--accent)" data-ic="receipt"></span><div><strong>A fresh new look</strong><span>Your month now prints out of the till on Home, with your budget, ways to save and where your money went right beside it. On a computer, Tilly has a sidebar and uses the whole screen.</span></div></li>
+      <li><span class="hl-ic" style="--c:var(--accent)" data-ic="spark"></span><div><strong>Midnight and gold</strong><span>Tilly is dark all the time now: charcoal everywhere, a gold till and buttons, and green for money you could save.</span></div></li>
+      <li><span class="hl-ic" style="--c:var(--accent)" data-ic="receipt"></span><div><strong>Your month prints out of the till</strong><span>Home shows your budget, ways to save and where your money went right beside the receipt. On a computer, Tilly has a sidebar and uses the whole screen.</span></div></li>
       <li><span class="hl-ic" style="--c:var(--good)" data-ic="piggy"></span><div><strong>Ways to save</strong><span>Insights now finds fees, pricey stores and categories running high, with what each change would save.</span></div></li>
       <li><span class="hl-ic" style="--c:var(--accent)" data-ic="target"></span><div><strong>The Plan tab</strong><span>Budgets with a daily spending allowance, savings goals, and your subscriptions, in one place.</span></div></li>
       <li><span class="hl-ic" style="--c:var(--p-violet)" data-ic="star"></span><div><strong>Tilly Pro</strong><span>Price tracker, cheaper-store finder, budgets for every category and person, reports and more. Free for 14 days.</span></div></li>
       <li><span class="hl-ic" style="--c:var(--p-orange)" data-ic="edit"></span><div><strong>Edit receipts</strong><span>Fix a saved receipt's store, date, items or tax, and get a warning before adding one twice.</span></div></li>
-      <li><span class="hl-ic" style="--c:var(--p-teal)" data-ic="help"></span><div><strong>Help and support</strong><span>Answers to common questions, a way to contact support, and our Terms and Privacy Policy.</span></div></li>
     </ul>
     <button class="btn primary" type="button" data-close>Got it</button>
   </div>
@@ -472,10 +473,10 @@
 
 <div class="toast" id="toast" hidden role="status"></div>
 
-<script src="vendor/capacitor.js?v=202611251756"></script>
-<script src="vendor/qrcode.js?v=202611251756"></script>
-<script src="vendor/supabase.js?v=202611251756"></script>
-<script src="scan.js?v=202611251756"></script>
-<script src="app.js?v=202611251756"></script>
+<script src="vendor/capacitor.js?v=202611252313"></script>
+<script src="vendor/qrcode.js?v=202611252313"></script>
+<script src="vendor/supabase.js?v=202611252313"></script>
+<script src="scan.js?v=202611252313"></script>
+<script src="app.js?v=202611252313"></script>
 </body>
 </html>

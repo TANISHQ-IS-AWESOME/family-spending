@@ -5,7 +5,7 @@
   const SUPABASE_KEY = 'sb_publishable_Lq6n-ZvzHKyYWGkEHp2EFw_jW2hU4HE';
   const ACCOUNT_FN = SUPABASE_URL + '/functions/v1/account';
   const BILLING_FN = SUPABASE_URL + '/functions/v1/billing';
-  const APP_VERSION = '2.1';
+  const APP_VERSION = '2.2';
   // Pro prices. Stripe charges them in US dollars once card payments are switched on.
   const PRO_PRICE = { month: 2.99, year: 24.99 };
   const FREE_PROFILES = 3, FREE_GOALS = 1;
@@ -87,7 +87,7 @@
   const r2 = (x) => Math.round(x * 100) / 100;
   const lsEarly = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
   const CURRENCIES = ['$', '€', '£', '₹', '¥'];
-  const prefs = { theme: lsEarly('tilly-theme') || 'system', currency: CURRENCIES.includes(lsEarly('tilly-currency')) ? lsEarly('tilly-currency') : '$', start: lsEarly('tilly-start') === 'all' ? 'all' : 'latest', reminder: lsEarly('tilly-reminder') === 'on' };
+  const prefs = { currency: CURRENCIES.includes(lsEarly('tilly-currency')) ? lsEarly('tilly-currency') : '$', start: lsEarly('tilly-start') === 'all' ? 'all' : 'latest', reminder: lsEarly('tilly-reminder') === 'on' };
   // ---------- currency ----------
   // Every amount is stored in US dollars. Picking another currency converts what's shown at the
   // latest exchange rate, and amounts typed into the add sheet are converted back to dollars.
@@ -1229,15 +1229,14 @@
   }
 
   // Pro accent colors (saved on this device; they switch back when Pro ends)
-  const ACCENTS = [['blue', 'Ink blue', '#2B3FD6'], ['emerald', 'Emerald', '#0E8A5C'], ['coral', 'Coral', '#D9482F'], ['violet', 'Violet', '#6E43CC'], ['lagoon', 'Lagoon', '#0B7F96'], ['rose', 'Rose', '#C2306F'], ['graphite', 'Graphite', '#3A3F57']];
-  const curAccent = () => { const a = ls.get('tilly-accent') || 'blue'; return ACCENTS.some((x) => x[0] === a) ? a : 'blue'; };
+  // Gold is everyone's color; Pro adds six more. Tilly is always dark, so each one is tuned for charcoal.
+  const ACCENTS = [['gold', 'Gold', '#E8B04B'], ['emerald', 'Emerald', '#5FD3A2'], ['coral', 'Coral', '#FF9A85'], ['violet', 'Violet', '#B79CF5'], ['lagoon', 'Lagoon', '#63CFDC'], ['rose', 'Rose', '#F28BB1'], ['graphite', 'Silver', '#D4D2CC']];
+  const curAccent = () => { const a = ls.get('tilly-accent') || 'gold'; return ACCENTS.some((x) => x[0] === a) ? a : 'gold'; };
   function applyAccent() {
     let a = curAccent();
-    if (a !== 'blue' && (mode === 'demo' || loaded) && !isPro()) a = 'blue';
+    if (a !== 'gold' && (mode === 'demo' || loaded) && !isPro()) a = 'gold';
     const root = document.documentElement;
-    if (a === 'blue') root.removeAttribute('data-accent'); else root.setAttribute('data-accent', a);
-    const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.content = (ACCENTS.find((x) => x[0] === a) || ACCENTS[0])[2];
+    if (a === 'gold') root.removeAttribute('data-accent'); else root.setAttribute('data-accent', a);
   }
 
   // ---------- BUDGETS ----------
@@ -1850,10 +1849,6 @@
     if (!res.ok) throw { code: d.error || 'server_error' };
     return d;
   }
-  function applyTheme() {
-    const r = document.documentElement;
-    if (prefs.theme === 'light' || prefs.theme === 'dark') r.setAttribute('data-theme', prefs.theme); else r.removeAttribute('data-theme');
-  }
   const setPref = (k, v) => { prefs[k] = v; ls.set('tilly-' + k, v); };
   const setRow = (label, sub, control) => h('div', { class: 'set-row' }, h('div', { class: 'set-label' }, label, sub ? h('small', { text: sub }) : null), control);
   const segPick = (label, options, value, onPick) => h('div', { class: 'seg', role: 'group', 'aria-label': label }, options.map(([k, text]) => h('button', { 'aria-pressed': String(value === k), text, onclick: () => onPick(k) })));
@@ -1933,11 +1928,11 @@
       actions.length || !pro || e.source === 'trial' ? h('div', { class: 'pro-card-actions' }, ...actions, !pro || e.source === 'trial' ? codeBtn : null) : null);
   }
   function accentRow() {
-    const pro = isPro(), on = pro || mode === 'demo' ? curAccent() : 'blue';
+    const pro = isPro(), on = pro || mode === 'demo' ? curAccent() : 'gold';
     return setRow(h('span', { class: 'lbl-pro' }, 'Accent color', pro ? null : proChip('tiny')), pro ? 'The color of buttons and highlights.' : 'Six more colors come with Pro.',
       h('div', { class: 'accent-pick', role: 'radiogroup', 'aria-label': 'Accent color' }, ACCENTS.map(([k, name, hex]) => h('button', {
         type: 'button', class: 'swatch sm', role: 'radio', 'aria-checked': String(on === k), 'aria-label': name, title: name, c: hex,
-        onclick: () => { if (k !== 'blue' && !requirePro('colors')) return; ls.set('tilly-accent', k); applyAccent(); render(); } }))));
+        onclick: () => { if (k !== 'gold' && !requirePro('colors')) return; ls.set('tilly-accent', k); applyAccent(); render(); } }))));
   }
   function helpCard() {
     const row = (ic, label, fn) => h('button', { class: 'list-link', onclick: fn }, h('span', { class: 'll-ic' }, icon(ic)), h('span', { text: label }), icon('chev'));
@@ -1963,9 +1958,7 @@
       h('div', { class: 'section-head' }, h('h2', { class: 'section-title', text: 'Settings' })),
       proCard(),
       card('Profiles', 'Rename, recolor or delete a profile, or add a new one.', list, h('button', { class: 'btn primary', style: { marginTop: '14px' }, onclick: () => openProfileSheet(null) }, icon('plus'), 'New profile')),
-      card('Appearance', null,
-        setRow('Theme', 'System follows your phone or computer.', segPick('Theme', [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']], prefs.theme, (k) => { setPref('theme', k); applyTheme(); render(); })),
-        accentRow()),
+      card('Appearance', null, accentRow()),
       card('Preferences', 'Saved on this device.',
         setRow('Currency', cur() === '$' ? 'Amounts are saved in US dollars. Pick another currency to convert everything at the latest exchange rate.' : `Converted from US dollars at 1 USD = ${rate().toLocaleString('en-US', { maximumFractionDigits: 4 })} ${CUR[cur()].code}${fx && fx.date ? ` (rate from ${fmtDate(fx.date)})` : ''}. New receipts are entered in ${CUR[cur()].code}.`, (() => {
           const sel = h('select', { class: 'set-select', 'aria-label': 'Currency' }, CURRENCIES.map((c) => new Option(`${c} ${CUR[c].code}`, c))); sel.value = cur();
@@ -2364,10 +2357,9 @@
   });
   function openDoc(kind) {
     const k = kind === 'privacy' ? 'privacy' : 'terms';
-    const theme = document.documentElement.getAttribute('data-theme') || (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
     $('doc-title').textContent = k === 'privacy' ? 'Privacy Policy' : 'Terms of Service';
     openSheet('sheet-doc');
-    $('doc-frame').src = `${k}.html?embed=1&theme=${theme}`;
+    $('doc-frame').src = `${k}.html?embed=1`;
   }
   document.addEventListener('click', (e) => {
     const d = e.target.closest('[data-doc]'); if (d) { e.preventDefault(); openDoc(d.dataset.doc); return; }
