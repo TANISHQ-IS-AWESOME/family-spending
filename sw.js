@@ -1,7 +1,7 @@
 // Keeps the app and its libraries on the device so Tilly opens and scans offline.
 // Always asks the network first and skips the browser's HTTP cache, so a new version
 // never mixes with pieces of an old one.
-const CACHE = 'tilly-202611251528';
+const CACHE = 'tilly-202611251756';
 const PRECACHE = [
   './', 'index.html', 'app.css', 'app.js', 'scan.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png', 'terms.html', 'privacy.html',
   'vendor/capacitor.js', 'vendor/qrcode.js', 'vendor/supabase.js', 'vendor/tesseract/tesseract.min.js', 'vendor/tesseract/worker.min.js',

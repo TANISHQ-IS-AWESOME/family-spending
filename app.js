@@ -5,7 +5,7 @@
   const SUPABASE_KEY = 'sb_publishable_Lq6n-ZvzHKyYWGkEHp2EFw_jW2hU4HE';
   const ACCOUNT_FN = SUPABASE_URL + '/functions/v1/account';
   const BILLING_FN = SUPABASE_URL + '/functions/v1/billing';
-  const APP_VERSION = '2.0';
+  const APP_VERSION = '2.1';
   // Pro prices. Stripe charges them in US dollars once card payments are switched on.
   const PRO_PRICE = { month: 2.99, year: 24.99 };
   const FREE_PROFILES = 3, FREE_GOALS = 1;
@@ -183,7 +183,8 @@
     if (/(restaurant|cafe|starbucks|dunkin|mcdonald|chipotle|pizza|office|doordash|uber ?eats|grubhub|panera|subway|chick-fil-a|taco bell|wendy|burger)/i.test(s) || /\b(meal|lunch|dinner|breakfast)\b/i.test(i)) return 'Food & dining';
     if (/(henna|shampoo|conditioner|\bsoap\b|lotion|toothpaste|toothbrush|deodorant|razor|makeup|cosmetic|hair ?cut|salon|vitamin|medicine|prescription|pharmacy|eye drops|tylenol|advil|floss|sunscreen|face wash|moisturizer)/i.test(i) || /(cvs|walgreens|ulta|sephora|pharmacy)/i.test(s)) return 'Personal';
     if (/(headphone|earbud|charger|cable|shirt|pants|shoes|socks|sweater|clothes|jacket|\btoy\b|\bbook\b|phone case|electronic|towel|bedsheet|decor|\bgift\b|\bpan\b|peeler|firework)/i.test(i) || /(amazon|target|best buy|macy|tj ?maxx|marshalls|ikea|old navy|kohl)/i.test(s)) return 'Shopping';
-    if (GROCERY_STORES.test(s) || !s) return 'Groceries';
+    if (GROCERY_STORES.test(s) || /(grocer|supermarket|\bmarket\b|instacart|fresh)/i.test(s) || !s) return 'Groceries';
+    if (/\b(milk|eggs?|bread|bananas?|apples?|chicken|beef|pork|fish|salmon|yogurt|cheese|butter|rice|pasta|cereal|oats|flour|sugar|coffee|tea|juice|vegetables?|fruit|lettuce|spinach|tomato(es)?|potato(es)?|onions?|carrots?|berries|grapes|avocados?|tofu|beans)\b/i.test(i)) return 'Groceries';
     return 'Miscellaneous';
   }
 
@@ -678,6 +679,52 @@
   $('qr-share').addEventListener('click', async () => { try { await navigator.share({ title: 'Tilly', text: qrSummary }); } catch (e) {} });
 
   // ---------- HOME ----------
+  // The month's receipt prints out of a till at the top. It prints once per visit; after that it's just there.
+  let printed = false;
+  function homeWidgets() {
+    const ws = [], tb = budgets.find((b) => b.scope === 'total'), goPlan = () => { planSeg = 'budgets'; setTab('plan'); };
+    if (tb) {
+      const st = budgetState(tb);
+      ws.push(h('button', { class: 'widget w-budget ' + st.status, onclick: goPlan },
+        h('span', { class: 'w-label' }, h('i', { class: 'w-dot', 'aria-hidden': 'true' }), `${MONTHS[new Date().getMonth()]} budget`),
+        h('span', { class: 'w-value' }, moneyWhole(Math.abs(st.left)), h('small', { text: st.left >= 0 ? ' left' : ' over' })),
+        budgetBar(tb, st),
+        h('span', { class: 'w-sub', text: st.left > 0 && st.daysLeft ? `${moneyWhole(st.perDay)} a day for ${plural(st.daysLeft, 'day')}` : STATUS_TXT[st.status] })));
+    } else {
+      ws.push(h('button', { class: 'widget w-empty', onclick: goPlan },
+        h('span', { class: 'w-label' }, icon('target'), 'Monthly budget'),
+        h('span', { class: 'w-value small', text: 'Set a budget' }),
+        h('span', { class: 'w-sub', text: 'See what you can spend each day.' })));
+    }
+    const tips = visibleTips(), total = tips.reduce((t, x) => t + (x.save || 0), 0), top = tips.find((x) => x.save >= 1) || tips[0];
+    ws.push(h('button', { class: 'widget w-save', onclick: () => setTab('insights') },
+      h('span', { class: 'w-label' }, icon('piggy'), 'Ways to save'),
+      total >= 1 ? h('span', { class: 'w-value' }, '~' + moneyWhole(total), h('small', { text: ' a month' })) : h('span', { class: 'w-value small', text: top ? plural(tips.length, 'tip') : 'No tips yet' }),
+      h('span', { class: 'w-sub clamp', text: top ? top.title : 'Add a few receipts and Tilly starts looking.' })));
+    return h('div', { class: 'widgets' }, ws);
+  }
+  function homeCategories(ps) {
+    const total = sum(ps, 'price');
+    const rows = CATS.map((c) => ({ c, t: sum(ps.filter((p) => catInfo(p.category).name === c.name), 'price') })).filter((x) => x.t > 0).sort((a, b) => b.t - a.t);
+    if (!rows.length || total <= 0) return null;
+    const top = rows.slice(0, 4), rest = rows.slice(4).reduce((t, x) => t + x.t, 0), max = top[0].t;
+    return h('button', { class: 'card where', onclick: () => setTab('insights') },
+      h('span', { class: 'where-head' }, h('b', { text: 'Where it went' }), h('span', { class: 'note', text: 'Before tax' })),
+      ...top.map((x) => h('span', { class: 'where-row', c: x.c.c },
+        h('span', { class: 'cat-icon sm' }, icon(x.c.icon)),
+        h('span', { class: 'where-name', text: x.c.name }),
+        h('span', { class: 'where-amt', text: money(x.t) }),
+        h('span', { class: 'where-bar' }, h('i', { style: { width: Math.max(3, (x.t / max) * 100) + '%' } })))),
+      rest > 0 ? h('span', { class: 'note', text: `${rows.length - 4} more ${rows.length - 4 === 1 ? 'category' : 'categories'}: ${money(rest)}` }) : null);
+  }
+  function receiptRow(s) {
+    const p = profileById(s.profile_id) || { name: '?', color: 'blue' }, c = colorVar(p.color);
+    const total = r2(sum(s.items, 'price') + sum(s.taxes, 'tax'));
+    return h('button', { class: 'rrow', onclick: () => { filterProfile = 'all'; query = (s.store || '').toLowerCase(); setTab('receipts'); } },
+      avatar(s.store || '?', c),
+      h('span', { class: 'rrow-main' }, h('b', { text: s.store || 'No store' }), h('small', null, h('span', { class: 'who', c }, dot(c), p.name), `${fmtDate(s.date)}, ${plural(s.items.length, 'item')}`)),
+      h('span', { class: 'rrow-amt', text: money(total) }));
+  }
   function viewHome() {
     const out = [];
     if (!profiles.length) {
@@ -698,34 +745,36 @@
 
     const num = h('p', { class: 'receipt-num' });
     const split = h('div', { class: 'split', role: 'img', 'aria-label': 'Share of spending by profile' }, pos.map((t) => h('i', { c: colorVar(t.p.color), style: { width: (t.total / posSum) * 100 + '%' }, title: `${t.p.name} ${money(t.total)}` })));
-    out.push(h('section', { class: 'receipt', id: 'hero' },
+    const receipt = h('section', { class: 'receipt' + (printed || reduceMotion ? '' : ' printing'), id: 'hero' },
       h('div', { class: 'receipt-top' }, h('span', { text: 'Tilly' }), h('span', { text: range })),
-      h('p', { class: 'receipt-label', text: `Total spent · ${fmtMonth(month)}` }),
+      h('p', { class: 'receipt-label', text: `Total spent, ${fmtMonth(month)}` }),
       num,
       h('p', { class: 'receipt-break', text: ps.length ? `items ${money(items)} + tax ${money(tax)}` : 'No receipts yet. Tap + to add one.' }),
       h('hr', { class: 'rule' }),
       pos.length ? split : null,
       pos.length ? h('div', { class: 'split-key' }, pos.map((t) => h('span', null, dot(colorVar(t.p.color)), t.p.name, h('b', { text: pct(t.total, posSum) + '%' })))) : null,
       ps.length ? h('button', { class: 'barcode-btn', type: 'button', 'aria-label': 'Show a QR code of this month\'s totals', onclick: () => openQr(month, ps, ts) },
-        h('div', { class: 'barcode', 'aria-hidden': 'true' }), h('span', { text: 'Tap to share' })) : h('div', { class: 'barcode', 'aria-hidden': 'true' })));
+        h('div', { class: 'barcode', 'aria-hidden': 'true' }), h('span', { text: 'Tap to share' })) : h('div', { class: 'barcode', 'aria-hidden': 'true' }));
+    printed = true;
     animateNumber(num, r2(items + tax));
+    out.push(h('div', { class: 'home-grid' },
+      h('div', { class: 'till' }, h('span', { class: 'till-slot', 'aria-hidden': 'true' }), h('div', { class: 'paper' }, receipt)),
+      h('div', { class: 'home-side' }, homeWidgets(), homeCategories(ps), recapCard())));
 
-    const bud = homeBudget(); if (bud) out.push(bud);
-    const tip = homeTip(); if (tip) out.push(tip);
-    const recap = recapCard(); if (recap) out.push(recap);
-    out.push(h('div', { class: 'section-head' }, h('h2', { class: 'section-title', text: 'Profiles' }), h('span', { class: 'note', text: 'Before tax' })));
+    out.push(h('div', { class: 'section-head' }, h('h2', { class: 'section-title', text: 'Who spent what' }), h('span', { class: 'note', text: 'Before tax' })));
     const max = Math.max(1, ...totals.map((t) => t.total));
-    out.push(h('div', { class: 'tiles' },
-      totals.map((t) => h('button', { class: 'tile', c: colorVar(t.p.color), onclick: () => { filterProfile = t.p.id; setTab('receipts'); } },
-        h('span', { class: 'tile-top' }, avatar(t.p.name, colorVar(t.p.color), 'round solid'), h('span', { class: 'tile-name', text: t.p.name })),
-        h('span', { class: 'tile-amt', text: money(t.total) }),
+    out.push(h('div', { class: 'pscroll', role: 'list' },
+      totals.map((t) => h('button', { class: 'pcard', role: 'listitem', c: colorVar(t.p.color), onclick: () => { filterProfile = t.p.id; setTab('receipts'); } },
+        avatar(t.p.name, colorVar(t.p.color), 'round solid'),
+        h('span', { class: 'pcard-name', text: t.p.name }),
+        h('span', { class: 'pcard-amt', text: money(t.total) }),
         h('span', { class: 'tile-bar' }, h('i', { style: { width: Math.max(0, (t.total / max) * 100) + '%' } })),
-        h('span', { class: 'tile-sub', text: `${pct(Math.max(0, t.total), Math.max(posSum, 0.01))}% · ${plural(t.n, 'item')}` }))),
-      h('button', { class: 'tile new', onclick: () => openProfileSheet(null) }, h('span', { class: 'plus' }, icon('plus')), 'New profile', !isPro() && profiles.length >= FREE_PROFILES ? proChip('tiny') : null)));
+        h('span', { class: 'pcard-sub', text: `${pct(Math.max(0, t.total), Math.max(posSum, 0.01))}% of the month, ${plural(t.n, 'item')}` }))),
+      h('button', { class: 'pcard new', role: 'listitem', onclick: () => openProfileSheet(null) }, h('span', { class: 'plus' }, icon('plus')), h('span', { text: 'New profile' }), !isPro() && profiles.length >= FREE_PROFILES ? proChip('tiny') : null)));
 
-    const slips = buildSlips(ps, ts).slice(0, 4);
+    const slips = buildSlips(ps, ts).slice(0, 5);
     out.push(h('div', { class: 'section-head' }, h('h2', { class: 'section-title', text: 'Latest receipts' }), slips.length ? h('button', { class: 'link', text: 'See all', onclick: () => { filterProfile = 'all'; setTab('receipts'); } }) : null));
-    out.push(slips.length ? h('div', { class: 'slips' }, slips.map((s) => slipEl(s, { compact: true }))) : h('div', { class: 'card empty', text: `Nothing in ${fmtMonth(month)} yet. Tap + to add a receipt.` }));
+    out.push(slips.length ? h('div', { class: 'rlist' }, slips.map(receiptRow)) : h('div', { class: 'card empty', text: `Nothing in ${fmtMonth(month)} yet. Tap + to add a receipt.` }));
     return out;
   }
 
@@ -1245,16 +1294,6 @@
         h('p', { class: 'bud-day', text: allowance(st) }),
         h('button', { class: 'link', text: 'Change amount', onclick: () => openBudgetSheet(b) })));
   }
-  function homeBudget() {
-    const tb = budgets.find((b) => b.scope === 'total');
-    if (!tb) return null;
-    const st = budgetState(tb);
-    return h('button', { class: 'card bud-mini', onclick: () => { planSeg = 'budgets'; setTab('plan'); } },
-      h('span', { class: 'bm-top' }, h('span', { class: 'bm-kicker', text: `${MONTHS[new Date().getMonth()]} budget` }), h('span', { class: 'bud-status ' + st.status, text: STATUS_TXT[st.status] })),
-      h('span', { class: 'bm-nums' }, h('b', { class: 'mono', text: money(Math.abs(st.left)) }), h('span', { text: st.left >= 0 ? ' left' : ' over' }), h('span', { class: 'bm-of', text: `of ${money(tb.amount)}` })),
-      budgetBar(tb, st),
-      h('span', { class: 'note', text: allowance(st) }));
-  }
   function viewBudgets() {
     const total = budgets.find((b) => b.scope === 'total');
     const others = budgets.filter((b) => b.scope !== 'total' && (b.scope !== 'profile' || profileById(b.target)));
@@ -1705,16 +1744,6 @@
       : h('button', { class: 'link muted', text: `${plural(hiddenN, 'hidden tip')}`, onclick: () => { showHiddenTips = true; render(); } }));
     return el;
   }
-  function homeTip() {
-    const vis = visibleTips(), t = vis.find((x) => x.save >= 1) || vis[0];
-    if (!t) return null;
-    return h('button', { class: 'card home-tip', c: t.c, onclick: () => setTab('insights') },
-      h('span', { class: 'hl-ic' }, icon(t.icon)),
-      h('span', { class: 'ht-main' }, h('span', { class: 'save-kicker', text: 'Way to save' }), h('b', { text: t.title })),
-      t.save >= 1 ? h('span', { class: 'tip-save', text: `~${moneyWhole(t.save)}/mo` }) : null,
-      icon('chev'));
-  }
-
   // ---------- PRICE TRACKER (Pro) ----------
   let priceQuery = '', priceAll = false;
   function priceItems() {
@@ -1809,7 +1838,7 @@
   function viewPlan() {
     const seg = h('div', { class: 'seg wide three plan-seg', role: 'tablist', 'aria-label': 'Plan' },
       [['budgets', 'Budgets'], ['goals', 'Goals'], ['subs', 'Subscriptions']].map(([k, t]) => h('button', { role: 'tab', 'aria-selected': String(planSeg === k), text: t, onclick: () => { planSeg = k; render(); } })));
-    return [seg, ...(planSeg === 'goals' ? viewGoals() : planSeg === 'subs' ? viewSubs() : viewBudgets())];
+    return [h('div', { class: 'section-head' }, h('h2', { class: 'section-title', text: 'Plan' })), seg, ...(planSeg === 'goals' ? viewGoals() : planSeg === 'subs' ? viewSubs() : viewBudgets())];
   }
 
   // ---------- SETTINGS ----------
@@ -2016,7 +2045,8 @@
     if (!loaded) { view.replaceChildren(h('div', { class: 'card empty' }, h('span', { class: 'spin' }), 'Loading your receipts…')); return; }
     $('open-settings').setAttribute('aria-current', tab === 'settings' ? 'page' : 'false');
     $('month').closest('.pill-select').hidden = tab === 'plan' || tab === 'settings';
-    $('pro-badge').hidden = !isPro();
+    $('pro-badge').hidden = !isPro(); $('pro-badge-side').hidden = !isPro();
+    view.dataset.tab = tab; document.body.dataset.tab = tab;
     const kids = tab === 'receipts' ? viewReceipts() : tab === 'insights' ? viewInsights() : tab === 'settings' ? viewSettings() : tab === 'plan' ? viewPlan() : viewHome();
     view.replaceChildren(...kids.filter(Boolean));
     if (keepFocus && $('receipt-search')) { const i = $('receipt-search'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
@@ -2036,6 +2066,7 @@
   $('month').addEventListener('change', (e) => { month = e.target.value; render(); });
   $('open-settings').addEventListener('click', () => setTab('settings'));
   $('pro-badge').addEventListener('click', () => setTab('settings'));
+  $('pro-badge-side').addEventListener('click', () => setTab('settings'));
   const topBar = document.querySelector('.top');
   const markScrolled = () => topBar.classList.toggle('scrolled', window.scrollY > 4);
   window.addEventListener('scroll', markScrolled, { passive: true }); markScrolled();

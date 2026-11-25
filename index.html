@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap">
 <script>try{var t=localStorage.getItem('tilly-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);var a=localStorage.getItem('tilly-accent');if(a&&a!=='blue')document.documentElement.setAttribute('data-accent',a);}catch(e){}</script>
-<link rel="stylesheet" href="app.css?v=202611251528">
+<link rel="stylesheet" href="app.css?v=202611251756">
 </head>
 <body>
 
@@ -29,7 +29,8 @@
       <h1>Know exactly who spent what.</h1>
       <p class="lede">Snap a receipt, pick whose it is, and Tilly keeps the running total for everyone in your home, month by month.</p>
 
-      <div class="mini-receipt" aria-hidden="true">
+      <div class="mini-till" aria-hidden="true"><span class="till-slot"></span>
+      <div class="mini-receipt">
         <div class="mr-top"><span>TILLY</span><span>THIS MONTH</span></div>
         <div class="mr-row"><span><i style="background:var(--p-pink)"></i>Maya</span><span>$412.80</span></div>
         <div class="mr-row"><span><i style="background:var(--p-blue)"></i>Jordan</span><span>$268.15</span></div>
@@ -37,6 +38,7 @@
         <div class="mr-rule"></div>
         <div class="mr-row total"><span>Total</span><span>$1,412.35</span></div>
         <div class="barcode"></div>
+      </div>
       </div>
 
       <ul class="perks">
@@ -121,11 +123,13 @@
   <main id="view" class="view"></main>
 
   <nav class="tabs" aria-label="Sections">
+    <div class="nav-brand only-wide"><span class="brand"><span class="mark" aria-hidden="true"></span><span class="word">Tilly</span></span><button class="pro-chip pro-badge" id="pro-badge-side" type="button" hidden aria-label="Tilly Pro: see your plan">PRO</button></div>
     <button data-tab="home"><span data-ic="home"></span><span>Home</span></button>
     <button data-tab="receipts"><span data-ic="receipt"></span><span>Receipts</span></button>
-    <button class="fab" id="open-add" aria-label="Add a receipt"><span data-ic="plus"></span></button>
+    <button class="fab" id="open-add" aria-label="Add a receipt"><span data-ic="plus"></span><span class="fab-label">Add receipt</span></button>
     <button data-tab="plan" aria-label="Plan: budgets, goals and subscriptions"><span data-ic="target"></span><span>Plan</span></button>
     <button data-tab="insights"><span data-ic="insights"></span><span>Insights</span></button>
+    <button data-tab="settings" class="only-wide"><span data-ic="gear"></span><span>Settings</span></button>
   </nav>
 </div>
 
@@ -413,8 +417,9 @@
 <!-- ============ WHAT'S NEW ============ -->
 <div class="sheet-bg" id="sheet-new" hidden>
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="new-title">
-    <div class="sheet-head"><h2 id="new-title">What's new in Tilly 2.0</h2><button class="x" type="button" data-close aria-label="Close">×</button></div>
+    <div class="sheet-head"><h2 id="new-title">What's new in Tilly 2.1</h2><button class="x" type="button" data-close aria-label="Close">×</button></div>
     <ul class="whatsnew">
+      <li><span class="hl-ic" style="--c:var(--accent)" data-ic="receipt"></span><div><strong>A fresh new look</strong><span>Your month now prints out of the till on Home, with your budget, ways to save and where your money went right beside it. On a computer, Tilly has a sidebar and uses the whole screen.</span></div></li>
       <li><span class="hl-ic" style="--c:var(--good)" data-ic="piggy"></span><div><strong>Ways to save</strong><span>Insights now finds fees, pricey stores and categories running high, with what each change would save.</span></div></li>
       <li><span class="hl-ic" style="--c:var(--accent)" data-ic="target"></span><div><strong>The Plan tab</strong><span>Budgets with a daily spending allowance, savings goals, and your subscriptions, in one place.</span></div></li>
       <li><span class="hl-ic" style="--c:var(--p-violet)" data-ic="star"></span><div><strong>Tilly Pro</strong><span>Price tracker, cheaper-store finder, budgets for every category and person, reports and more. Free for 14 days.</span></div></li>
@@ -467,10 +472,10 @@
 
 <div class="toast" id="toast" hidden role="status"></div>
 
-<script src="vendor/capacitor.js?v=202611251528"></script>
-<script src="vendor/qrcode.js?v=202611251528"></script>
-<script src="vendor/supabase.js?v=202611251528"></script>
-<script src="scan.js?v=202611251528"></script>
-<script src="app.js?v=202611251528"></script>
+<script src="vendor/capacitor.js?v=202611251756"></script>
+<script src="vendor/qrcode.js?v=202611251756"></script>
+<script src="vendor/supabase.js?v=202611251756"></script>
+<script src="scan.js?v=202611251756"></script>
+<script src="app.js?v=202611251756"></script>
 </body>
 </html>
