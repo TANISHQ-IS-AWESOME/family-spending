@@ -6,8 +6,8 @@ const root = new URL('../', import.meta.url);
 const www = new URL('../www/', import.meta.url);
 rmSync(www, { recursive: true, force: true });
 mkdirSync(www, { recursive: true });
-for (const f of ['index.html', 'app.css', 'app.js', 'scan.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png', 'privacy.html']) {
-  try { cpSync(new URL(f, root), new URL(f, www)); } catch (e) { if (f !== 'privacy.html') throw e; }
+for (const f of ['index.html', 'app.css', 'app.js', 'scan.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png', 'terms.html', 'privacy.html']) {
+  cpSync(new URL(f, root), new URL(f, www));
 }
 cpSync(new URL('vendor/', root), new URL('vendor/', www), { recursive: true });
 console.log('Built www/');

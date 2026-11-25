@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Tilly</title>
-<meta name="description" content="Tilly keeps every receipt and shows who spent what. Snap a receipt, pick a profile, see the totals.">
+<meta name="description" content="Tilly keeps every receipt, shows who spent what, and finds ways to save. Snap a receipt, pick a profile, see the totals.">
 <meta name="theme-color" content="#2B3FD6">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -16,8 +16,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap">
-<script>try{var t=localStorage.getItem('tilly-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
-<link rel="stylesheet" href="app.css?v=202611151444">
+<script>try{var t=localStorage.getItem('tilly-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);var a=localStorage.getItem('tilly-accent');if(a&&a!=='blue')document.documentElement.setAttribute('data-accent',a);}catch(e){}</script>
+<link rel="stylesheet" href="app.css?v=202611251528">
 </head>
 <body>
 
@@ -43,6 +43,7 @@
         <li><span class="perk-ic" data-ic="camera"></span><div><strong>Scan receipts for free</strong><span>Take a photo and the items fill themselves in.</span></div></li>
         <li><span class="perk-ic" data-ic="profiles"></span><div><strong>A profile for everyone</strong><span>You, a partner, the kids, a side business.</span></div></li>
         <li><span class="perk-ic" data-ic="insights"></span><div><strong>See where it goes</strong><span>By category, store, day and month, with tax kept separate.</span></div></li>
+        <li><span class="perk-ic" data-ic="piggy"></span><div><strong>Find ways to save</strong><span>Tilly spots fees, pricier stores and categories running high, and shows what you'd save.</span></div></li>
       </ul>
     </div>
 
@@ -60,17 +61,53 @@
       <button class="text-btn forgot" id="forgot" type="button">Forgot your password?</button>
       <p class="status err" id="auth-err" aria-live="polite"></p>
       <button class="btn primary" id="auth-submit" type="submit">Sign in</button>
+      <p class="fine legal" id="legal-line" hidden>By creating an account, you agree to the <a href="terms.html" data-doc="terms">Terms of Service</a> and <a href="privacy.html" data-doc="privacy">Privacy Policy</a>.</p>
       <div class="or"><span>or</span></div>
       <button class="btn ghost" id="try-demo" type="button">Try the demo first</button>
       <p class="fine">Your receipts are private to your account. The demo uses made-up sample data and saves nothing.</p>
     </form>
+
+    <section class="auth-more" aria-labelledby="plans-title">
+      <h2 id="plans-title">Free to use. Pro when you want more.</h2>
+      <div class="plans">
+        <article class="plan">
+          <h3>Free</h3>
+          <p class="plan-price"><span class="mono">$0</span> <small>forever</small></p>
+          <ul class="ticks">
+            <li>Receipt scanning, right on your device</li>
+            <li>Up to 3 profiles</li>
+            <li>Insights, subscriptions and a monthly budget</li>
+            <li>Money-saving tips from your own receipts</li>
+            <li>One savings goal</li>
+            <li>Works offline</li>
+          </ul>
+        </article>
+        <article class="plan pro">
+          <h3><span class="pro-chip">PRO</span> Tilly Pro</h3>
+          <p class="plan-price"><span class="mono">$2.99</span> <small>a month, or $24.99 a year</small></p>
+          <ul class="ticks">
+            <li>Everything in Free</li>
+            <li>Cheaper-store finder and price-rise alerts</li>
+            <li>A price tracker for everything you buy</li>
+            <li>Budgets for every category and person</li>
+            <li>Unlimited profiles and savings goals</li>
+            <li>Monthly PDF reports and Pro colors</li>
+          </ul>
+          <p class="fine">Try it free for 14 days. No card needed.</p>
+        </article>
+      </div>
+      <footer class="auth-foot">
+        <nav aria-label="About Tilly"><a href="terms.html" data-doc="terms">Terms</a><a href="privacy.html" data-doc="privacy">Privacy</a><button type="button" class="linkish" data-open="sheet-help">Help</button></nav>
+        <span>© 2026 Tilly</span>
+      </footer>
+    </section>
   </div>
 </section>
 
 <!-- ============ APP ============ -->
 <div class="app" id="app" hidden>
   <header class="top">
-    <div class="brand"><span class="mark" aria-hidden="true"></span><span class="word">Tilly</span></div>
+    <div class="brand"><span class="mark" aria-hidden="true"></span><span class="word">Tilly</span><button class="pro-chip pro-badge" id="pro-badge" type="button" hidden aria-label="Tilly Pro: see your plan">PRO</button></div>
     <div class="top-right">
       <label class="pill-select" for="month"><select id="month" aria-label="Month"></select></label>
       <button class="icon-btn" id="open-settings" type="button" aria-label="Settings"><span data-ic="gear"></span></button>
@@ -87,7 +124,7 @@
     <button data-tab="home"><span data-ic="home"></span><span>Home</span></button>
     <button data-tab="receipts"><span data-ic="receipt"></span><span>Receipts</span></button>
     <button class="fab" id="open-add" aria-label="Add a receipt"><span data-ic="plus"></span></button>
-    <button data-tab="subs" aria-label="Subscriptions"><span data-ic="repeat"></span><span>Subs</span></button>
+    <button data-tab="plan" aria-label="Plan: budgets, goals and subscriptions"><span data-ic="target"></span><span>Plan</span></button>
     <button data-tab="insights"><span data-ic="insights"></span><span>Insights</span></button>
   </nav>
 </div>
@@ -100,7 +137,7 @@
       <p class="step-label">Whose is it?</p>
       <div class="chips" id="add-who" role="group" aria-label="Profile"></div>
     </div>
-    <div>
+    <div id="add-photo">
       <p class="step-label">Photo of the receipt</p>
       <div class="photo-row">
         <label class="drop" for="cam"><span data-ic="camera"></span>Take photo</label>
@@ -225,6 +262,195 @@
   </form>
 </div>
 
+<!-- ============ TILLY PRO ============ -->
+<div class="sheet-bg" id="sheet-pro" hidden>
+  <div class="sheet pro-sheet" role="dialog" aria-modal="true" aria-labelledby="pro-title">
+    <div class="sheet-head"><span class="pro-chip big">PRO</span><button class="x" type="button" data-close aria-label="Close">×</button></div>
+    <div class="pro-hero">
+      <h2 id="pro-title">Spend smarter with Tilly Pro</h2>
+      <p class="note" id="pro-sub">Find cheaper stores, catch price rises and keep every category on budget.</p>
+    </div>
+    <ul class="pro-feats" id="pro-feats"></ul>
+    <div class="plan-pick" id="plan-pick" role="radiogroup" aria-label="Choose a plan"></div>
+    <p class="status err" id="pro-err" aria-live="polite"></p>
+    <p class="status ok" id="pro-ok" aria-live="polite"></p>
+    <button class="btn primary" type="button" id="pro-trial">Start 14-day free trial</button>
+    <button class="btn ghost" type="button" id="pro-buy">Subscribe</button>
+    <p class="note center" id="pro-soon" hidden></p>
+    <button class="text-btn center" type="button" id="pro-code-toggle">Have a code?</button>
+    <div class="code-redeem" id="pro-code-row" hidden>
+      <input class="input mono" id="pro-code" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="TILLY-XXXX-XXXX-XXXX" maxlength="40" aria-label="Pro code">
+      <button class="btn primary small" type="button" id="pro-redeem">Redeem</button>
+    </div>
+    <p class="fine" id="pro-fine">The free trial ends by itself and never charges you. Paid plans renew automatically until you cancel, and you can cancel any time in Settings. By continuing, you agree to the <a href="terms.html" data-doc="terms">Terms of Service</a> and <a href="privacy.html" data-doc="privacy">Privacy Policy</a>.</p>
+  </div>
+</div>
+
+<!-- ============ BUDGET ============ -->
+<div class="sheet-bg" id="sheet-budget" hidden>
+  <form class="sheet" role="dialog" aria-modal="true" aria-labelledby="bd-title" id="bd-form" novalidate>
+    <div class="sheet-head"><h2 id="bd-title">New budget</h2><button class="x" type="button" data-close aria-label="Close">×</button></div>
+    <div>
+      <p class="step-label">Budget for</p>
+      <div class="seg wide three" id="bd-scope" role="group" aria-label="Budget for">
+        <button type="button" data-v="total">Everything</button><button type="button" data-v="category">A category</button><button type="button" data-v="profile">A person</button>
+      </div>
+    </div>
+    <div id="bd-target-row" hidden>
+      <p class="step-label" id="bd-target-label">Which category?</p>
+      <div class="chips wrap" id="bd-target" role="group" aria-labelledby="bd-target-label"></div>
+    </div>
+    <label class="field" for="bd-amount"><span id="bd-amount-label">Each month</span><input class="input mono" id="bd-amount" type="number" step="1" min="1" inputmode="decimal" placeholder="0" required></label>
+    <p class="note" id="bd-hint"></p>
+    <p class="status err" id="bd-err" aria-live="polite"></p>
+    <button class="btn primary" type="submit" id="bd-save">Save budget</button>
+    <button class="btn danger" type="button" id="bd-delete" hidden>Delete budget</button>
+  </form>
+</div>
+
+<!-- ============ SAVINGS GOAL ============ -->
+<div class="sheet-bg" id="sheet-goal" hidden>
+  <form class="sheet" role="dialog" aria-modal="true" aria-labelledby="goal-title" id="goal-form" novalidate>
+    <div class="sheet-head"><h2 id="goal-title">New goal</h2><button class="x" type="button" data-close aria-label="Close">×</button></div>
+    <label class="field" for="goal-name">What are you saving for?
+      <input class="input" id="goal-name" type="text" maxlength="60" placeholder="A trip, a new phone, a rainy-day fund…" autocomplete="off" required>
+    </label>
+    <div class="suggest" id="goal-suggest"></div>
+    <div class="fields">
+      <label class="field" for="goal-target"><span id="goal-target-label">Goal amount</span><input class="input mono" id="goal-target" type="number" step="1" min="1" inputmode="decimal" placeholder="0" required></label>
+      <label class="field" for="goal-saved"><span id="goal-saved-label">Saved so far</span><input class="input mono" id="goal-saved" type="number" step="0.01" min="0" inputmode="decimal" placeholder="0"></label>
+    </div>
+    <label class="field" for="goal-due">Reach it by (optional)<input class="input" id="goal-due" type="date"></label>
+    <div>
+      <p class="step-label">Color</p>
+      <div class="swatches" id="goal-colors" role="radiogroup" aria-label="Color"></div>
+    </div>
+    <p class="note" id="goal-note"></p>
+    <p class="status err" id="goal-err" aria-live="polite"></p>
+    <button class="btn primary" type="submit" id="goal-save">Create goal</button>
+    <button class="btn danger" type="button" id="goal-delete" hidden>Delete goal</button>
+  </form>
+</div>
+
+<!-- ============ MOVE MONEY FOR A GOAL ============ -->
+<div class="sheet-bg" id="sheet-money" hidden>
+  <form class="sheet" role="dialog" aria-modal="true" aria-labelledby="money-title" id="money-form" novalidate>
+    <div class="sheet-head"><h2 id="money-title">Add money</h2><button class="x" type="button" data-close aria-label="Close">×</button></div>
+    <div class="seg wide" id="money-dir" role="group" aria-label="Add or take out">
+      <button type="button" data-v="add">Add</button><button type="button" data-v="take">Take out</button>
+    </div>
+    <label class="field" for="money-amount"><span id="money-amount-label">Amount</span><input class="input mono" id="money-amount" type="number" step="0.01" min="0" inputmode="decimal" placeholder="0.00" required></label>
+    <div class="suggest" id="money-quick"></div>
+    <p class="note" id="money-note"></p>
+    <p class="status err" id="money-err" aria-live="polite"></p>
+    <button class="btn primary" type="submit" id="money-save">Save</button>
+  </form>
+</div>
+
+<!-- ============ PRICE HISTORY ============ -->
+<div class="sheet-bg" id="sheet-item" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="item-title">
+    <div class="sheet-head"><h2 id="item-title">Price history</h2><button class="x" type="button" data-close aria-label="Close">×</button></div>
+    <div id="item-body" class="item-body"></div>
+  </div>
+</div>
+
+<!-- ============ HELP ============ -->
+<div class="sheet-bg" id="sheet-help" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="help-title">
+    <div class="sheet-head"><h2 id="help-title">Help</h2><button class="x" type="button" data-close aria-label="Close">×</button></div>
+    <div class="faq">
+      <details><summary>How do I add a receipt?</summary><p>Tap the + button, pick whose receipt it is, then take or choose a photo. Tilly reads the items and prices for you. Check each line, fix anything it misread, and tap Add. You can also type the items yourself.</p></details>
+      <details><summary>Are my receipt photos uploaded?</summary><p>No. Tilly reads receipts on your device. The photo never leaves it. Only the items you choose to add are saved to your account.</p></details>
+      <details><summary>The scanner got something wrong</summary><p>Scanning works best with a flat, well-lit receipt and the whole thing in the frame. You can fix any line before adding it, and change a saved receipt later: open Receipts, tap Edit, then Edit receipt.</p></details>
+      <details><summary>What is a profile?</summary><p>A profile is anyone or anything you want a separate total for: you, a partner, the kids, the household or a side business. Free accounts can have 3 profiles. Pro has no limit.</p></details>
+      <details><summary>How do budgets work?</summary><p>Set a monthly amount in Plan, then Budgets. Tilly shows what's left, how much you can spend each day to stay on track, and warns you when you get close. Budgets start over on the 1st of each month. The overall budget is free. Budgets for each category and person come with Pro.</p></details>
+      <details><summary>How does Tilly find ways to save?</summary><p>Tilly looks at your last few months of receipts for fees, subscriptions, categories running higher than usual and stores that charge more for the same item. Each tip says how its saving was worked out. Savings are estimates, not promises.</p></details>
+      <details><summary>How do subscriptions work?</summary><p>Add a subscription in Plan, then Subscriptions, with its price and how often it renews. Tilly adds each charge to Receipts on its date and shows what's coming up.</p></details>
+      <details><summary>What comes with Tilly Pro?</summary><p>The cheaper-store finder, price-rise alerts and price tracker, budgets for every category and person, unlimited profiles and goals, monthly PDF reports and Pro colors. You can try it free for 14 days without a card.</p></details>
+      <details><summary>How do I cancel Pro?</summary><p>If you pay for Pro, go to Settings, then Tilly Pro, then Manage subscription, and cancel any time. You keep Pro until the end of the period you paid for. The free trial ends by itself and never charges you.</p></details>
+      <details><summary>Does Tilly work offline?</summary><p>Yes. Your data is kept on your device too, so you can look at it and add receipts without a connection. Changes sync when you're back online.</p></details>
+      <details><summary>How do I get my data out?</summary><p>In Settings, under Your data, you can download every receipt as a spreadsheet file or a full backup of your account.</p></details>
+      <details><summary>I forgot my password</summary><p>On the sign-in screen, tap Forgot your password? to get a reset link by email, or use the recovery code you saved when you made your account.</p></details>
+      <details><summary>How do I delete my account?</summary><p>Settings, then Account, then Delete account. It removes your account and everything in it for good.</p></details>
+    </div>
+    <button class="btn primary" type="button" id="help-contact"><span data-ic="mail"></span>Contact support</button>
+    <p class="fine"><a href="terms.html" data-doc="terms">Terms of Service</a> · <a href="privacy.html" data-doc="privacy">Privacy Policy</a></p>
+  </div>
+</div>
+
+<!-- ============ CONTACT SUPPORT ============ -->
+<div class="sheet-bg" id="sheet-support" hidden>
+  <form class="sheet" role="dialog" aria-modal="true" aria-labelledby="sup-title" id="sup-form" novalidate>
+    <div class="sheet-head"><h2 id="sup-title">Contact support</h2><button class="x" type="button" data-close aria-label="Close">×</button></div>
+    <p class="note">Ask a question, report a bug, share an idea, or make a billing or privacy request.</p>
+    <label class="field" for="sup-topic">Topic
+      <select class="input" id="sup-topic">
+        <option value="help">I need help</option>
+        <option value="bug">Something isn't working</option>
+        <option value="idea">I have an idea</option>
+        <option value="billing">Billing or Pro</option>
+        <option value="privacy">Privacy or my data</option>
+        <option value="other">Something else</option>
+      </select>
+    </label>
+    <label class="field" for="sup-msg">Message<textarea class="input" id="sup-msg" rows="5" maxlength="4000" placeholder="Tell us what's going on" required></textarea></label>
+    <label class="field" for="sup-email">Email for a reply<input class="input" id="sup-email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com"></label>
+    <p class="status err" id="sup-err" aria-live="polite"></p>
+    <p class="status ok" id="sup-ok" aria-live="polite"></p>
+    <button class="btn primary" type="submit" id="sup-send">Send message</button>
+  </form>
+</div>
+
+<!-- ============ TERMS / PRIVACY VIEWER ============ -->
+<div class="sheet-bg" id="sheet-doc" hidden>
+  <div class="sheet doc-sheet" role="dialog" aria-modal="true" aria-labelledby="doc-title">
+    <div class="sheet-head"><h2 id="doc-title">Terms of Service</h2><button class="x" type="button" data-close aria-label="Close">×</button></div>
+    <iframe id="doc-frame" title="Document"></iframe>
+  </div>
+</div>
+
+<!-- ============ WHAT'S NEW ============ -->
+<div class="sheet-bg" id="sheet-new" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="new-title">
+    <div class="sheet-head"><h2 id="new-title">What's new in Tilly 2.0</h2><button class="x" type="button" data-close aria-label="Close">×</button></div>
+    <ul class="whatsnew">
+      <li><span class="hl-ic" style="--c:var(--good)" data-ic="piggy"></span><div><strong>Ways to save</strong><span>Insights now finds fees, pricey stores and categories running high, with what each change would save.</span></div></li>
+      <li><span class="hl-ic" style="--c:var(--accent)" data-ic="target"></span><div><strong>The Plan tab</strong><span>Budgets with a daily spending allowance, savings goals, and your subscriptions, in one place.</span></div></li>
+      <li><span class="hl-ic" style="--c:var(--p-violet)" data-ic="star"></span><div><strong>Tilly Pro</strong><span>Price tracker, cheaper-store finder, budgets for every category and person, reports and more. Free for 14 days.</span></div></li>
+      <li><span class="hl-ic" style="--c:var(--p-orange)" data-ic="edit"></span><div><strong>Edit receipts</strong><span>Fix a saved receipt's store, date, items or tax, and get a warning before adding one twice.</span></div></li>
+      <li><span class="hl-ic" style="--c:var(--p-teal)" data-ic="help"></span><div><strong>Help and support</strong><span>Answers to common questions, a way to contact support, and our Terms and Privacy Policy.</span></div></li>
+    </ul>
+    <button class="btn primary" type="button" data-close>Got it</button>
+  </div>
+</div>
+
+<!-- ============ WELCOME (new accounts) ============ -->
+<div class="sheet-bg" id="sheet-welcome" hidden data-sticky>
+  <form class="sheet" role="dialog" aria-modal="true" aria-labelledby="wel-title" id="wel-form" novalidate>
+    <div class="brand big"><span class="mark" aria-hidden="true"></span><span class="word">Tilly</span></div>
+    <div>
+      <h2 id="wel-title">Welcome! Let's set you up</h2>
+      <p class="note">Two quick questions. You can change both later.</p>
+    </div>
+    <div>
+      <p class="step-label">Who's spending?</p>
+      <p class="note" style="margin:-4px 0 10px">Each profile gets its own running total.</p>
+      <div class="chips wrap" id="wel-who" role="group" aria-label="Profiles to create"></div>
+      <div class="import-row" style="margin-top:10px">
+        <input class="input" id="wel-custom" type="text" maxlength="40" placeholder="Add another name" aria-label="Add another profile">
+        <button class="btn ghost small" type="button" id="wel-add">Add</button>
+      </div>
+    </div>
+    <label class="field" for="wel-budget"><span id="wel-budget-label">Monthly budget (optional)</span><input class="input mono" id="wel-budget" type="number" min="0" step="1" inputmode="decimal" placeholder="Leave empty to skip"></label>
+    <p class="status err" id="wel-err" aria-live="polite"></p>
+    <button class="btn primary" type="submit" id="wel-go">Get started</button>
+    <button class="text-btn center" type="button" id="wel-skip">Skip for now</button>
+  </form>
+</div>
+
+<div class="report" id="report" aria-hidden="true"></div>
+
 <!-- ============ MONTH QR ============ -->
 <div class="sheet-bg" id="sheet-qr" hidden>
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="qr-title">
@@ -241,10 +467,10 @@
 
 <div class="toast" id="toast" hidden role="status"></div>
 
-<script src="vendor/capacitor.js?v=202611151444"></script>
-<script src="vendor/qrcode.js?v=202611151444"></script>
-<script src="vendor/supabase.js?v=202611151444"></script>
-<script src="scan.js?v=202611151444"></script>
-<script src="app.js?v=202611151444"></script>
+<script src="vendor/capacitor.js?v=202611251528"></script>
+<script src="vendor/qrcode.js?v=202611251528"></script>
+<script src="vendor/supabase.js?v=202611251528"></script>
+<script src="scan.js?v=202611251528"></script>
+<script src="app.js?v=202611251528"></script>
 </body>
 </html>

@@ -1,8 +1,8 @@
 {
   "name": "tilly",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
-  "description": "Tilly: keep every receipt and see who spent what.",
+  "description": "Tilly: keep every receipt, see who spent what, and find ways to save.",
   "scripts": {
     "vendor": "node scripts/vendor.mjs",
     "build": "node scripts/build-www.mjs",
